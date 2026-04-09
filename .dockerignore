@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitignore
+.env*.local
+.env
+*.md
+.DS_Store
+.vscode
+.idea
+coverage
+supabase/.temp
