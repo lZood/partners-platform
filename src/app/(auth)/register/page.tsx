@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { createUserRecord } from "@/actions/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -42,6 +43,12 @@ export default function RegisterPage() {
       setError(authError.message);
       setLoading(false);
       return;
+    }
+
+    // Create the user record in our app's users table
+    // so admins can see them in the "unassigned" section
+    if (data.user) {
+      await createUserRecord(data.user.id, name, email);
     }
 
     // After signup, an admin needs to assign the user to a partner + role

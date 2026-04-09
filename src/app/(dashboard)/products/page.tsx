@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getProductsRevenueSummary } from "@/actions/product-analytics";
 import { ProductsClient } from "./products-client";
 
 export default async function ProductsPage() {
@@ -13,6 +14,7 @@ export default async function ProductsPage() {
       name,
       description,
       is_active,
+      created_at,
       partner_id,
       product_type_id,
       partners (id, name),
@@ -52,11 +54,24 @@ export default async function ProductsPage() {
     };
   });
 
+  // Get revenue summaries for all products
+  const productIds = enriched.map((p: any) => p.id);
+  const revenueResult = await getProductsRevenueSummary(productIds);
+
+  // Convert Map to plain object for serialization
+  let revenueSummaries: Record<string, any> = {};
+  if (revenueResult.success) {
+    Array.from(revenueResult.data.entries()).forEach(([key, value]) => {
+      revenueSummaries[key] = value;
+    });
+  }
+
   return (
     <ProductsClient
       initialProducts={enriched}
       productTypes={productTypes ?? []}
       partners={partners ?? []}
+      revenueSummaries={revenueSummaries}
     />
   );
 }

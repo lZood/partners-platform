@@ -22,6 +22,7 @@ const nextConfig = {
       config.externals = config.externals || [];
       config.externals.push({
         "iconv-lite": "commonjs iconv-lite",
+        "nodemailer": "commonjs nodemailer",
       });
     }
     return config;

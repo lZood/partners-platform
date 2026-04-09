@@ -1,8 +1,24 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getUnassignedUsers } from "@/actions/users";
 import { CollaboratorsClient } from "./collaborators-client";
 
 export default async function CollaboratorsPage() {
   const supabase = createServerSupabaseClient();
+
+  // Check if current user is super_admin
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+
+  let isSuperAdmin = false;
+  if (authUser) {
+    const { data: roles } = await supabase
+      .from("user_partner_roles")
+      .select("role, users!inner (auth_user_id)")
+      .eq("users.auth_user_id", authUser.id);
+
+    isSuperAdmin = (roles ?? []).some((r: any) => r.role === "super_admin");
+  }
 
   // Fetch collaborators with their roles and partners
   const { data: users } = await supabase
@@ -15,6 +31,7 @@ export default async function CollaboratorsPage() {
       user_type,
       is_active,
       created_at,
+      auth_user_id,
       user_partner_roles (
         id,
         role,
@@ -32,10 +49,15 @@ export default async function CollaboratorsPage() {
     .eq("is_active", true)
     .order("name", { ascending: true });
 
+  // Fetch unassigned users (self-registered, no partner yet)
+  const unassignedResult = await getUnassignedUsers();
+
   return (
     <CollaboratorsClient
       initialUsers={users ?? []}
       partners={partners ?? []}
+      unassignedUsers={unassignedResult.success ? unassignedResult.data ?? [] : []}
+      isSuperAdmin={isSuperAdmin}
     />
   );
 }

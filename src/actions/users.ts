@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { sendInvitationEmail } from "@/lib/email";
 import { userSchema } from "@/lib/validations/schemas";
 import type { UserRole } from "@/types/database";
 
@@ -10,6 +12,22 @@ export type UserActionResult = {
   error?: string;
   data?: any;
 };
+
+/**
+ * Get the app's base URL.
+ * Prefers the NEXT_PUBLIC_APP_URL env var (set in production),
+ * falls back to reading request headers.
+ */
+function getBaseUrl(): string {
+  // Use explicit env var if available (recommended for production)
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+  const headersList = headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") ?? "http";
+  return `${protocol}://${host}`;
+}
 
 /**
  * Get all collaborators visible to the current user.
@@ -117,8 +135,9 @@ export async function createCollaborator(
   }
 
   let authUserId: string | null = null;
+  let emailWarning: string | null = null;
 
-  // If system_user, create auth account via service role
+  // If system_user, create auth account and optionally send invite email
   if (parsed.data.userType === "system_user") {
     if (!parsed.data.email) {
       return {
@@ -128,24 +147,65 @@ export async function createCollaborator(
     }
 
     const serviceClient = createServiceRoleClient();
-    const { data: authData, error: authError } =
-      await serviceClient.auth.admin.createUser({
-        email: parsed.data.email,
-        email_confirm: true,
-        user_metadata: { name: parsed.data.name },
-      });
 
-    if (authError) {
-      if (authError.message.includes("already been registered")) {
-        return {
-          success: false,
-          error: `El email "${parsed.data.email}" ya esta registrado`,
-        };
-      }
-      return { success: false, error: authError.message };
+    // Check if email is already registered
+    const { data: existingUsers } =
+      await serviceClient.auth.admin.listUsers();
+    const alreadyExists = existingUsers?.users?.some(
+      (u) => u.email?.toLowerCase() === parsed.data.email!.toLowerCase()
+    );
+    if (alreadyExists) {
+      return {
+        success: false,
+        error: `El email "${parsed.data.email}" ya esta registrado`,
+      };
     }
 
-    authUserId = authData.user.id;
+    const skipInvite = formData.get("skipInvite") === "true";
+
+    // Step 1: Generate an invite link using Supabase admin API
+    // This creates the auth user AND generates the magic link, but does NOT send email
+    const { data: linkData, error: linkError } =
+      await serviceClient.auth.admin.generateLink({
+        type: "invite",
+        email: parsed.data.email,
+        options: {
+          data: { name: parsed.data.name },
+          redirectTo: `${getBaseUrl()}/auth/set-password`,
+        },
+      });
+
+    if (linkError) {
+      const msg =
+        linkError.message ||
+        (typeof linkError === "object"
+          ? JSON.stringify(linkError)
+          : String(linkError));
+      return {
+        success: false,
+        error: `Error creando cuenta: ${msg || "Error desconocido"}`,
+      };
+    }
+
+    authUserId = linkData.user.id;
+
+    // Step 2: Send the email ourselves via our own SMTP (Mailu)
+    if (!skipInvite) {
+      // The hashed_token from generateLink needs to be passed through
+      // the auth callback: /auth/callback?token_hash=XXX&type=invite
+      const inviteLink = `${getBaseUrl()}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=invite`;
+
+      const emailResult = await sendInvitationEmail({
+        to: parsed.data.email,
+        userName: parsed.data.name,
+        inviteLink,
+      });
+
+      if (!emailResult.success) {
+        emailWarning = emailResult.error ?? "No se pudo enviar el email";
+        console.error("Email send failed:", emailWarning);
+      }
+    }
   }
 
   // Create user record
@@ -178,7 +238,10 @@ export async function createCollaborator(
   }
 
   revalidatePath("/collaborators");
-  return { success: true, data: newUser };
+  return {
+    success: true,
+    data: { ...newUser, emailWarning },
+  };
 }
 
 /**
@@ -256,6 +319,284 @@ export async function toggleCollaboratorActive(
     .from("users")
     .update({ is_active: isActive })
     .eq("id", id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/collaborators");
+  return { success: true };
+}
+
+/**
+ * Resend invitation email to a system_user who hasn't set their password yet.
+ * Only callable by super_admin.
+ */
+export async function resendInvitation(
+  userId: string
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+  if (!currentUser) return { success: false, error: "No autenticado" };
+
+  // Get the user record to find their email and auth_user_id
+  const { data: targetUser, error: fetchError } = await supabase
+    .from("users")
+    .select("id, name, email, user_type, auth_user_id")
+    .eq("id", userId)
+    .single();
+
+  if (fetchError || !targetUser) {
+    return { success: false, error: "Usuario no encontrado" };
+  }
+
+  if (targetUser.user_type !== "system_user") {
+    return {
+      success: false,
+      error: "Solo se puede reenviar invitaciones a usuarios del sistema",
+    };
+  }
+
+  if (!targetUser.email) {
+    return { success: false, error: "El usuario no tiene email registrado" };
+  }
+
+  const serviceClient = createServiceRoleClient();
+
+  // If the user already has an auth account, delete it first
+  // Then re-create with generateLink so we get a fresh token
+  if (targetUser.auth_user_id) {
+    const { error: deleteAuthError } =
+      await serviceClient.auth.admin.deleteUser(targetUser.auth_user_id);
+
+    if (deleteAuthError) {
+      return {
+        success: false,
+        error: `Error eliminando cuenta anterior: ${deleteAuthError.message}`,
+      };
+    }
+  }
+
+  // Generate invite link (creates auth user + token, does NOT send email)
+  const { data: linkData, error: linkError } =
+    await serviceClient.auth.admin.generateLink({
+      type: "invite",
+      email: targetUser.email,
+      options: {
+        data: { name: targetUser.name },
+        redirectTo: `${getBaseUrl()}/auth/set-password`,
+      },
+    });
+
+  if (linkError) {
+    const msg =
+      linkError.message ||
+      (typeof linkError === "object" ? JSON.stringify(linkError) : String(linkError));
+    return {
+      success: false,
+      error: `Error generando invitacion: ${msg || "Error desconocido"}`,
+    };
+  }
+
+  // Update the auth_user_id in case it changed
+  if (linkData.user) {
+    await serviceClient
+      .from("users")
+      .update({ auth_user_id: linkData.user.id })
+      .eq("id", userId);
+  }
+
+  // Send the email ourselves via our SMTP
+  const inviteLink = `${getBaseUrl()}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=invite`;
+
+  const emailResult = await sendInvitationEmail({
+    to: targetUser.email,
+    userName: targetUser.name ?? "Usuario",
+    inviteLink,
+  });
+
+  if (!emailResult.success) {
+    return {
+      success: false,
+      error: emailResult.error ?? "Error enviando email. Verifica la configuracion SMTP.",
+    };
+  }
+
+  revalidatePath("/collaborators");
+  return { success: true, data: { email: targetUser.email } };
+}
+
+/**
+ * Delete a user completely: auth account + user record + partner roles.
+ * Only callable by super_admin. Cascading deletes should handle related records.
+ */
+export async function deleteUser(userId: string): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const {
+    data: { user: currentUser },
+  } = await supabase.auth.getUser();
+  if (!currentUser) return { success: false, error: "No autenticado" };
+
+  // Get the user record
+  const { data: targetUser, error: fetchError } = await supabase
+    .from("users")
+    .select("id, name, auth_user_id, user_type")
+    .eq("id", userId)
+    .single();
+
+  if (fetchError || !targetUser) {
+    return { success: false, error: "Usuario no encontrado" };
+  }
+
+  // Prevent deleting yourself
+  if (targetUser.auth_user_id === currentUser.id) {
+    return { success: false, error: "No puedes eliminarte a ti mismo" };
+  }
+
+  const serviceClient = createServiceRoleClient();
+
+  // Delete auth account if exists
+  if (targetUser.auth_user_id) {
+    const { error: deleteAuthError } =
+      await serviceClient.auth.admin.deleteUser(targetUser.auth_user_id);
+
+    if (deleteAuthError) {
+      // Continue anyway — auth user might already be deleted
+      console.error("Error deleting auth user:", deleteAuthError.message);
+    }
+  }
+
+  // Delete partner role assignments
+  await serviceClient
+    .from("user_partner_roles")
+    .delete()
+    .eq("user_id", userId);
+
+  // Delete product distributions
+  await serviceClient
+    .from("product_distributions")
+    .delete()
+    .eq("user_id", userId);
+
+  // Delete the user record itself
+  const { error: deleteError } = await serviceClient
+    .from("users")
+    .delete()
+    .eq("id", userId);
+
+  if (deleteError) {
+    return { success: false, error: `Error al eliminar: ${deleteError.message}` };
+  }
+
+  revalidatePath("/collaborators");
+  return { success: true, data: { name: targetUser.name } };
+}
+
+/**
+ * Called after a user self-registers via /register.
+ * Creates their record in the users table so admins can see and assign them.
+ */
+export async function createUserRecord(
+  authUserId: string,
+  name: string,
+  email: string
+): Promise<UserActionResult> {
+  // Use service role to bypass RLS — new users can't insert into users table
+  const supabase = createServiceRoleClient();
+
+  // Check if user record already exists
+  const { data: existing } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", authUserId)
+    .single();
+
+  if (existing) {
+    return { success: true, data: existing }; // Already exists, nothing to do
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      auth_user_id: authUserId,
+      name,
+      email,
+      user_type: "system_user",
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, data };
+}
+
+/**
+ * Get users who registered themselves but have no partner/role assignment.
+ * These are users waiting for a super_admin to assign them.
+ */
+export async function getUnassignedUsers(): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  // Get all users
+  const { data: allUsers, error: usersError } = await supabase
+    .from("users")
+    .select("id, name, email, user_type, is_active, created_at")
+    .eq("user_type", "system_user")
+    .order("created_at", { ascending: false });
+
+  if (usersError) {
+    return { success: false, error: usersError.message };
+  }
+
+  // Get users that DO have roles
+  const { data: assignedRoles } = await supabase
+    .from("user_partner_roles")
+    .select("user_id");
+
+  const assignedUserIds = new Set(
+    (assignedRoles ?? []).map((r: any) => r.user_id)
+  );
+
+  // Filter to only unassigned users
+  const unassigned = (allUsers ?? []).filter(
+    (u: any) => !assignedUserIds.has(u.id)
+  );
+
+  return { success: true, data: unassigned };
+}
+
+/**
+ * Assign an existing unassigned user to a partner with a role.
+ */
+export async function assignUserToPartner(
+  userId: string,
+  partnerId: string,
+  role: UserRole
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  // Verify user exists and has no current assignment
+  const { data: existing } = await supabase
+    .from("user_partner_roles")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1)
+    .single();
+
+  if (existing) {
+    return { success: false, error: "Este usuario ya esta asignado a un partner" };
+  }
+
+  const { error } = await supabase
+    .from("user_partner_roles")
+    .insert({ user_id: userId, partner_id: partnerId, role });
 
   if (error) {
     return { success: false, error: error.message };

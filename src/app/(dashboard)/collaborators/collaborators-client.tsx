@@ -10,6 +10,9 @@ import {
   ToggleRight,
   User,
   Ghost,
+  Trash2,
+  Mail,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +45,9 @@ import {
   updateCollaborator,
   toggleCollaboratorActive,
   updateUserRole,
+  assignUserToPartner,
+  resendInvitation,
+  deleteUser,
 } from "@/actions/users";
 import { useToast } from "@/components/shared/toast-provider";
 
@@ -59,6 +65,7 @@ interface AppUser {
   user_type: string;
   is_active: boolean;
   created_at: string;
+  auth_user_id: string | null;
   user_partner_roles: UserPartnerRole[];
 }
 
@@ -67,26 +74,51 @@ interface Partner {
   name: string;
 }
 
+interface UnassignedUser {
+  id: string;
+  name: string;
+  email: string | null;
+  created_at: string;
+}
+
 interface Props {
   initialUsers: AppUser[];
   partners: Partner[];
+  unassignedUsers: UnassignedUser[];
+  isSuperAdmin: boolean;
 }
 
-export function CollaboratorsClient({ initialUsers, partners }: Props) {
+export function CollaboratorsClient({
+  initialUsers,
+  partners,
+  unassignedUsers,
+  isSuperAdmin,
+}: Props) {
   const router = useRouter();
   const { showToast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [userType, setUserType] = useState<string>("virtual_profile");
+  const [skipInvite, setSkipInvite] = useState(false);
+
+  // Delete confirmation
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AppUser | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Resend loading state per user
+  const [resendingFor, setResendingFor] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    // Ensure userType is in formData (select doesn't always add it via name)
     formData.set("userType", userType);
+    if (skipInvite && userType === "system_user" && !editingUser) {
+      formData.set("skipInvite", "true");
+    }
 
     let result;
 
@@ -99,14 +131,31 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
     setLoading(false);
 
     if (result.success) {
-      showToast(
-        editingUser
-          ? `Colaborador "${formData.get("name")}" actualizado`
-          : `Colaborador "${formData.get("name")}" creado`,
-        "success"
-      );
+      const name = formData.get("name");
+      const wasSkipped = skipInvite && userType === "system_user" && !editingUser;
+      const emailWarn = result.data?.emailWarning;
+
+      if (editingUser) {
+        showToast(`Colaborador "${name}" actualizado`, "success");
+      } else if (wasSkipped) {
+        showToast(
+          `Colaborador "${name}" creado sin invitacion. Usa el boton de correo para enviarla.`,
+          "success"
+        );
+      } else if (emailWarn) {
+        showToast(
+          `Colaborador "${name}" creado, pero no se pudo enviar el email: ${emailWarn}. Puedes reenviar despues.`,
+          "error"
+        );
+      } else {
+        showToast(
+          `Colaborador "${name}" creado. Se envio invitacion por email.`,
+          "success"
+        );
+      }
       setDialogOpen(false);
       setEditingUser(null);
+      setSkipInvite(false);
       router.refresh();
     } else {
       showToast(result.error ?? "Error desconocido", "error");
@@ -146,6 +195,38 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
     }
   };
 
+  const handleResendInvitation = async (user: AppUser) => {
+    setResendingFor(user.id);
+    const result = await resendInvitation(user.id);
+    setResendingFor(null);
+
+    if (result.success) {
+      showToast(
+        `Invitacion reenviada a ${result.data?.email ?? user.email}`,
+        "success"
+      );
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error al reenviar", "error");
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!userToDelete) return;
+    setDeleteLoading(true);
+    const result = await deleteUser(userToDelete.id);
+    setDeleteLoading(false);
+
+    if (result.success) {
+      showToast(`"${result.data?.name ?? userToDelete.name}" eliminado`, "success");
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error al eliminar", "error");
+    }
+  };
+
   const openEdit = (user: AppUser) => {
     setEditingUser(user);
     setUserType(user.user_type);
@@ -155,19 +236,40 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
   const openCreate = () => {
     setEditingUser(null);
     setUserType("virtual_profile");
+    setSkipInvite(false);
     setDialogOpen(true);
   };
 
-  const roleLabels: Record<string, string> = {
-    super_admin: "Super Admin",
-    admin: "Admin",
-    collaborator: "Colaborador",
+  const openDeleteDialog = (user: AppUser) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
   };
 
-  const roleColors: Record<string, "default" | "secondary" | "outline"> = {
-    super_admin: "default",
-    admin: "secondary",
-    collaborator: "outline",
+  // Assign unassigned user to a partner
+  const handleAssign = async (userId: string, form: HTMLFormElement) => {
+    const formData = new FormData(form);
+    const partnerId = formData.get("assignPartnerId") as string;
+    const role = (formData.get("assignRole") as string) || "collaborator";
+
+    if (!partnerId) {
+      showToast("Selecciona un partner", "error");
+      return;
+    }
+
+    setLoading(true);
+    const result = await assignUserToPartner(
+      userId,
+      partnerId,
+      role as "super_admin" | "admin" | "collaborator"
+    );
+    setLoading(false);
+
+    if (result.success) {
+      showToast("Usuario asignado exitosamente", "success");
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error al asignar", "error");
+    }
   };
 
   return (
@@ -200,7 +302,6 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
               </DialogHeader>
 
               <div className="space-y-4 py-4">
-                {/* User Type (only on create) */}
                 {!editingUser && (
                   <div className="space-y-2">
                     <Label>Tipo de usuario</Label>
@@ -231,7 +332,6 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
                   />
                 </div>
 
-                {/* Email (required for system_user) */}
                 {(userType === "system_user" || editingUser?.email) && (
                   <div className="space-y-2">
                     <Label htmlFor="email">
@@ -251,7 +351,6 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
                   </div>
                 )}
 
-                {/* Partner + Role (only on create) */}
                 {!editingUser && (
                   <>
                     <div className="space-y-2">
@@ -282,6 +381,33 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
                         <option value="super_admin">Super Admin</option>
                       </select>
                     </div>
+
+                    {/* Skip invite option for system_user */}
+                    {userType === "system_user" && (
+                      <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={skipInvite}
+                            onChange={(e) => setSkipInvite(e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300"
+                          />
+                          <div>
+                            <p className="text-sm font-medium">
+                              Crear sin enviar invitacion
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Crea la cuenta sin enviar email. Podras enviar la
+                              invitacion despues con el boton de correo en la
+                              tabla.{" "}
+                              <span className="text-amber-600">
+                                Util si el SMTP aun no esta configurado.
+                              </span>
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -306,6 +432,61 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Eliminar Usuario
+            </DialogTitle>
+            <DialogDescription>
+              Esta accion no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+
+          {userToDelete && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <p className="text-sm text-red-800">
+                  Estas a punto de eliminar permanentemente a{" "}
+                  <span className="font-semibold">{userToDelete.name}</span>
+                  {userToDelete.email && (
+                    <>
+                      {" "}
+                      (<span className="font-mono text-xs">{userToDelete.email}</span>)
+                    </>
+                  )}
+                  .
+                </p>
+                <p className="text-sm text-red-700 mt-2">
+                  Se eliminara su cuenta de autenticacion, sus asignaciones a
+                  partners, y sus distribuciones en productos. Los reportes ya
+                  generados no se veran afectados.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? "Eliminando..." : "Eliminar Permanentemente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {initialUsers.length === 0 ? (
         <Card>
@@ -434,6 +615,27 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
                       </td>
                       <td className="py-3">
                         <div className="flex items-center justify-end gap-1">
+                          {/* Resend invitation — only for system_user with auth */}
+                          {isSuperAdmin &&
+                            user.user_type === "system_user" &&
+                            user.auth_user_id && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleResendInvitation(user)}
+                                disabled={resendingFor === user.id}
+                                title="Reenviar invitacion"
+                              >
+                                <Mail
+                                  className={`h-4 w-4 text-blue-600 ${
+                                    resendingFor === user.id
+                                      ? "animate-pulse"
+                                      : ""
+                                  }`}
+                                />
+                              </Button>
+                            )}
+
                           <Button
                             variant="ghost"
                             size="icon"
@@ -442,6 +644,7 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+
                           <Button
                             variant="ghost"
                             size="icon"
@@ -456,12 +659,96 @@ export function CollaboratorsClient({ initialUsers, partners }: Props) {
                               <ToggleLeft className="h-4 w-4 text-muted-foreground" />
                             )}
                           </Button>
+
+                          {/* Delete — only for super_admin */}
+                          {isSuperAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openDeleteDialog(user)}
+                              title="Eliminar usuario"
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Unassigned users — self-registered, waiting for partner assignment */}
+      {unassignedUsers.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-amber-600" />
+              Usuarios sin Asignar
+            </CardTitle>
+            <CardDescription>
+              Estos usuarios se registraron por su cuenta y estan esperando ser
+              asignados a un Partner.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {unassignedUsers.map((user) => (
+                <form
+                  key={user.id}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAssign(user.id, e.currentTarget);
+                  }}
+                  className="flex flex-wrap items-center gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <User className="h-4 w-4 text-amber-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{user.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user.email ?? "Sin email"} · Registrado{" "}
+                        {new Date(user.created_at).toLocaleDateString("es-MX", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <select
+                    name="assignPartnerId"
+                    required
+                    className="h-8 rounded border bg-background px-2 text-xs"
+                  >
+                    <option value="">Partner...</option>
+                    {partners.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    name="assignRole"
+                    className="h-8 rounded border bg-background px-2 text-xs"
+                  >
+                    <option value="collaborator">Colaborador</option>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+
+                  <Button type="submit" size="sm" disabled={loading}>
+                    Asignar
+                  </Button>
+                </form>
+              ))}
             </div>
           </CardContent>
         </Card>

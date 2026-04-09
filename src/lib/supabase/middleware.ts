@@ -43,7 +43,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth pages
-  if (user && isAuthPage) {
+  // BUT allow /auth/set-password (invited users need to set their password)
+  const isSetPasswordPage =
+    request.nextUrl.pathname.startsWith("/auth/set-password");
+
+  if (user && isAuthPage && !isSetPasswordPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
