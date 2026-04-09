@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:types": "npx supabase gen types typescript --project-id YOUR_PROJECT_ID > src/types/database.ts"
+    "db:types": "npx supabase gen types typescript --project-id zmarvensghcyuwgkowqq > src/types/database.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.0",
