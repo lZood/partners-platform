@@ -17,17 +17,31 @@ function getTransporter() {
     );
   }
 
+  const isImplicitTLS = port === 465;
+  const isSubmission = port === 587;
+
   return nodemailer.createTransport({
     host,
     port,
-    // port 465 = implicit TLS, 587 = STARTTLS, 25 = plain
-    secure: port === 465,
+    secure: isImplicitTLS,
     auth: { user, pass },
-    // Timeout generoso para servidores lentos
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-  });
+    // Port 25: disable TLS entirely — plain SMTP on internal/trusted network
+    // Port 587: use STARTTLS
+    // Port 465: implicit TLS
+    ...(isImplicitTLS
+      ? { tls: { rejectUnauthorized: false } }
+      : isSubmission
+      ? { requireTLS: true, tls: { rejectUnauthorized: false } }
+      : {
+          // Port 25: no TLS at all
+          ignoreTLS: true,
+          tls: { rejectUnauthorized: false },
+        }),
+    // Timeouts
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  } as any);
 }
 
 /**
