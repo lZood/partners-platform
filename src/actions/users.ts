@@ -165,6 +165,9 @@ export async function createCollaborator(
 
     // Step 1: Generate an invite link using Supabase admin API
     // This creates the auth user AND generates the magic link, but does NOT send email
+    // redirectTo points directly to set-password page — Supabase's action_link
+    // verifies the token and redirects with access_token in the hash fragment,
+    // which the set-password page's client-side code picks up automatically.
     const { data: linkData, error: linkError } =
       await serviceClient.auth.admin.generateLink({
         type: "invite",
@@ -191,9 +194,9 @@ export async function createCollaborator(
 
     // Step 2: Send the email ourselves via our own SMTP (Mailu)
     if (!skipInvite) {
-      // The hashed_token from generateLink needs to be passed through
-      // the auth callback: /auth/callback?token_hash=XXX&type=invite
-      const inviteLink = `${getBaseUrl()}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=invite`;
+      // Use Supabase's action_link which goes through their /auth/v1/verify endpoint.
+      // This handles OTP verification properly, then redirects to our redirectTo URL.
+      const inviteLink = linkData.properties.action_link;
 
       const emailResult = await sendInvitationEmail({
         to: parsed.data.email,
@@ -381,6 +384,7 @@ export async function resendInvitation(
   }
 
   // Generate invite link (creates auth user + token, does NOT send email)
+  // redirectTo points directly to set-password — Supabase handles token verification
   const { data: linkData, error: linkError } =
     await serviceClient.auth.admin.generateLink({
       type: "invite",
@@ -410,7 +414,8 @@ export async function resendInvitation(
   }
 
   // Send the email ourselves via our SMTP
-  const inviteLink = `${getBaseUrl()}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=invite`;
+  // Use Supabase's action_link which handles OTP verification properly
+  const inviteLink = linkData.properties.action_link;
 
   const emailResult = await sendInvitationEmail({
     to: targetUser.email,

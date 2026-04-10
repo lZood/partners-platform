@@ -65,11 +65,19 @@ export default function SetPasswordPage() {
       }
 
       // If there's an access_token in the hash, Supabase may auto-set the session
-      // Wait a moment for the client to pick it up
+      // We need to manually set the session from the hash tokens
       const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      if (accessToken && refreshToken) {
+        supabase.auth
+          .setSession({ access_token: accessToken, refresh_token: refreshToken })
+          .then(() => checkSession())
+          .catch(() => checkSession());
+        return;
+      }
       if (accessToken) {
-        // Give supabase client time to process the token
-        setTimeout(() => checkSession(), 500);
+        // Fallback: wait for supabase client to auto-detect
+        setTimeout(() => checkSession(), 1000);
         return;
       }
     }
