@@ -543,6 +543,65 @@ export async function createUserRecord(
 }
 
 /**
+ * Self-registration: creates auth user + users table record using admin API.
+ * This bypasses Supabase's email sending entirely (which can't reach our SMTP).
+ * The user is auto-confirmed and can log in immediately after admin assignment.
+ */
+export async function registerUser(
+  name: string,
+  email: string,
+  password: string
+): Promise<UserActionResult> {
+  const serviceClient = createServiceRoleClient();
+
+  // Check if email is already registered
+  const { data: existingUser } = await serviceClient
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .single();
+
+  if (existingUser) {
+    return { success: false, error: "Ya existe una cuenta con este correo electronico." };
+  }
+
+  // Create auth user with admin API — no confirmation email sent
+  const { data: authData, error: authError } =
+    await serviceClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // Auto-confirm, skip verification email
+      user_metadata: { name },
+    });
+
+  if (authError) {
+    const msg = authError.message || "Error desconocido al crear la cuenta";
+    if (msg.includes("already been registered") || msg.includes("already exists")) {
+      return { success: false, error: "Ya existe una cuenta con este correo electronico." };
+    }
+    return { success: false, error: msg };
+  }
+
+  // Create user record in users table
+  const { error: insertError } = await serviceClient
+    .from("users")
+    .insert({
+      auth_user_id: authData.user.id,
+      name,
+      email,
+      user_type: "system_user",
+    });
+
+  if (insertError) {
+    // Clean up auth user if table insert fails
+    await serviceClient.auth.admin.deleteUser(authData.user.id);
+    return { success: false, error: `Error creando registro de usuario: ${insertError.message}` };
+  }
+
+  return { success: true };
+}
+
+/**
  * Get users who registered themselves but have no partner/role assignment.
  * These are users waiting for a super_admin to assign them.
  */

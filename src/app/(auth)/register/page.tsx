@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { createUserRecord } from "@/actions/users";
+import { registerUser } from "@/actions/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,7 +17,6 @@ import {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,24 +29,19 @@ export default function RegisterPage() {
     setError("");
     setLoading(true);
 
-    const { data, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name },
-      },
-    });
-
-    if (authError) {
-      setError(authError.message);
+    if (password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres");
       setLoading(false);
       return;
     }
 
-    // Create the user record in our app's users table
-    // so admins can see them in the "unassigned" section
-    if (data.user) {
-      await createUserRecord(data.user.id, name, email);
+    // Use server action with admin API — bypasses Supabase email sending
+    const result = await registerUser(name, email, password);
+
+    if (!result.success) {
+      setError(result.error || "Error al crear la cuenta");
+      setLoading(false);
+      return;
     }
 
     // After signup, an admin needs to assign the user to a partner + role
