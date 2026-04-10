@@ -21,7 +21,7 @@ export default async function CollaboratorsPage() {
   }
 
   // Fetch collaborators with their roles and partners
-  const { data: users } = await supabase
+  const { data: allUsers } = await supabase
     .from("users")
     .select(
       `
@@ -42,6 +42,12 @@ export default async function CollaboratorsPage() {
     )
     .order("name", { ascending: true });
 
+  // Only show users that have at least one partner assignment in the main table
+  // Unassigned users appear in the separate "Usuarios sin Asignar" section
+  const users = (allUsers ?? []).filter(
+    (u: any) => u.user_partner_roles && u.user_partner_roles.length > 0
+  );
+
   // Fetch partners for the create form
   const { data: partners } = await supabase
     .from("partners")
@@ -54,7 +60,7 @@ export default async function CollaboratorsPage() {
 
   return (
     <CollaboratorsClient
-      initialUsers={users ?? []}
+      initialUsers={users}
       partners={partners ?? []}
       unassignedUsers={unassignedResult.success ? unassignedResult.data ?? [] : []}
       isSuperAdmin={isSuperAdmin}

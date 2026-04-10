@@ -13,6 +13,7 @@ import {
   Trash2,
   Mail,
   AlertTriangle,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,6 +110,16 @@ export function CollaboratorsClient({
 
   // Resend loading state per user
   const [resendingFor, setResendingFor] = useState<string | null>(null);
+
+  // Reject unassigned user
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [userToReject, setUserToReject] = useState<UnassignedUser | null>(null);
+  const [rejectLoading, setRejectLoading] = useState(false);
+
+  // Add partner to existing user
+  const [addPartnerDialogOpen, setAddPartnerDialogOpen] = useState(false);
+  const [addPartnerUser, setAddPartnerUser] = useState<AppUser | null>(null);
+  const [addPartnerLoading, setAddPartnerLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -243,6 +254,54 @@ export function CollaboratorsClient({
   const openDeleteDialog = (user: AppUser) => {
     setUserToDelete(user);
     setDeleteDialogOpen(true);
+  };
+
+  const handleAddPartner = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!addPartnerUser) return;
+    setAddPartnerLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const partnerId = formData.get("newPartnerId") as string;
+    const role = (formData.get("newPartnerRole") as string) || "collaborator";
+
+    if (!partnerId) {
+      showToast("Selecciona un partner", "error");
+      setAddPartnerLoading(false);
+      return;
+    }
+
+    const result = await assignUserToPartner(
+      addPartnerUser.id,
+      partnerId,
+      role as "super_admin" | "admin" | "collaborator"
+    );
+    setAddPartnerLoading(false);
+
+    if (result.success) {
+      showToast(`Partner asignado a "${addPartnerUser.name}"`, "success");
+      setAddPartnerDialogOpen(false);
+      setAddPartnerUser(null);
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error al asignar", "error");
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!userToReject) return;
+    setRejectLoading(true);
+    const result = await deleteUser(userToReject.id);
+    setRejectLoading(false);
+
+    if (result.success) {
+      showToast(`Solicitud de "${userToReject.name}" rechazada`, "success");
+      setRejectDialogOpen(false);
+      setUserToReject(null);
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error al rechazar", "error");
+    }
   };
 
   // Assign unassigned user to a partner
@@ -488,6 +547,133 @@ export function CollaboratorsClient({
         </DialogContent>
       </Dialog>
 
+      {/* Reject confirmation dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Rechazar Solicitud
+            </DialogTitle>
+            <DialogDescription>
+              Esta accion eliminara la cuenta del usuario.
+            </DialogDescription>
+          </DialogHeader>
+
+          {userToReject && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <p className="text-sm text-red-800">
+                  Vas a rechazar la solicitud de{" "}
+                  <span className="font-semibold">{userToReject.name}</span>
+                  {userToReject.email && (
+                    <>
+                      {" "}
+                      (<span className="font-mono text-xs">{userToReject.email}</span>)
+                    </>
+                  )}
+                  .
+                </p>
+                <p className="text-sm text-red-700 mt-2">
+                  Se eliminara su cuenta de autenticacion y su registro. El usuario
+                  podra volver a registrarse si lo desea.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRejectDialogOpen(false)}
+              disabled={rejectLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRejectConfirm}
+              disabled={rejectLoading}
+            >
+              {rejectLoading ? "Rechazando..." : "Rechazar Solicitud"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add partner dialog */}
+      <Dialog open={addPartnerDialogOpen} onOpenChange={setAddPartnerDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleAddPartner}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Agregar Partner
+              </DialogTitle>
+              <DialogDescription>
+                {addPartnerUser && (
+                  <>
+                    Asignar un partner adicional a{" "}
+                    <span className="font-semibold">{addPartnerUser.name}</span>.
+                  </>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Partner</Label>
+                <select
+                  name="newPartnerId"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Seleccionar Partner</option>
+                  {partners
+                    .filter(
+                      (p) =>
+                        !addPartnerUser?.user_partner_roles.some(
+                          (upr) => upr.partner_id === p.id
+                        )
+                    )
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Rol</Label>
+                <select
+                  name="newPartnerRole"
+                  required
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="collaborator">Colaborador</option>
+                  <option value="admin">Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddPartnerDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={addPartnerLoading}>
+                {addPartnerLoading ? "Asignando..." : "Asignar Partner"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {initialUsers.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
@@ -609,8 +795,17 @@ export function CollaboratorsClient({
                       <td className="py-3">
                         <Badge
                           variant={user.is_active ? "success" : "secondary"}
+                          className={
+                            !user.is_active && user.user_type === "system_user"
+                              ? "border-amber-300 bg-amber-50 text-amber-700"
+                              : ""
+                          }
                         >
-                          {user.is_active ? "Activo" : "Inactivo"}
+                          {user.is_active
+                            ? "Activo"
+                            : user.user_type === "system_user"
+                            ? "Pendiente"
+                            : "Inactivo"}
                         </Badge>
                       </td>
                       <td className="py-3">
@@ -635,6 +830,21 @@ export function CollaboratorsClient({
                                 />
                               </Button>
                             )}
+
+                          {/* Add additional partner */}
+                          {isSuperAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setAddPartnerUser(user);
+                                setAddPartnerDialogOpen(true);
+                              }}
+                              title="Agregar partner"
+                            >
+                              <Building2 className="h-4 w-4 text-amber-600" />
+                            </Button>
+                          )}
 
                           <Button
                             variant="ghost"
@@ -747,6 +957,22 @@ export function CollaboratorsClient({
                   <Button type="submit" size="sm" disabled={loading}>
                     Asignar
                   </Button>
+
+                  {isSuperAdmin && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        setUserToReject(user);
+                        setRejectDialogOpen(true);
+                      }}
+                      disabled={rejectLoading}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Rechazar
+                    </Button>
+                  )}
                 </form>
               ))}
             </div>

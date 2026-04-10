@@ -10,8 +10,8 @@ import {
   Loader2,
   XCircle,
   KeyRound,
-  RefreshCw,
 } from "lucide-react";
+import { activateCurrentUser } from "@/actions/users";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -148,6 +148,9 @@ export default function SetPasswordPage() {
       setFormError(msg);
       return;
     }
+
+    // Activate the user in the users table (invited users start as inactive)
+    await activateCurrentUser();
 
     setPageState("success");
 

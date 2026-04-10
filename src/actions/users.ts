@@ -211,7 +211,7 @@ export async function createCollaborator(
     }
   }
 
-  // Create user record
+  // Create user record — system_user starts inactive until they set their password
   const { data: newUser, error: userError } = await supabase
     .from("users")
     .insert({
@@ -219,6 +219,7 @@ export async function createCollaborator(
       email: parsed.data.email || null,
       user_type: parsed.data.userType,
       auth_user_id: authUserId,
+      is_active: parsed.data.userType === "system_user" ? false : true,
     })
     .select()
     .single();
@@ -602,6 +603,33 @@ export async function registerUser(
 }
 
 /**
+ * Activate the current user after they set their password for the first time.
+ * Called from the set-password page on success.
+ */
+export async function activateCurrentUser(): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: "No authenticated user" };
+  }
+
+  const serviceClient = createServiceRoleClient();
+  const { error } = await serviceClient
+    .from("users")
+    .update({ is_active: true })
+    .eq("auth_user_id", user.id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
  * Get users who registered themselves but have no partner/role assignment.
  * These are users waiting for a super_admin to assign them.
  */
@@ -646,16 +674,16 @@ export async function assignUserToPartner(
 ): Promise<UserActionResult> {
   const supabase = createServerSupabaseClient();
 
-  // Verify user exists and has no current assignment
+  // Check if this specific user+partner combination already exists
   const { data: existing } = await supabase
     .from("user_partner_roles")
     .select("id")
     .eq("user_id", userId)
-    .limit(1)
+    .eq("partner_id", partnerId)
     .single();
 
   if (existing) {
-    return { success: false, error: "Este usuario ya esta asignado a un partner" };
+    return { success: false, error: "Este usuario ya esta asignado a este partner" };
   }
 
   const { error } = await supabase
@@ -665,6 +693,13 @@ export async function assignUserToPartner(
   if (error) {
     return { success: false, error: error.message };
   }
+
+  // Activate user if they were pending (self-registered)
+  await supabase
+    .from("users")
+    .update({ is_active: true })
+    .eq("id", userId)
+    .eq("is_active", false);
 
   revalidatePath("/collaborators");
   return { success: true };
