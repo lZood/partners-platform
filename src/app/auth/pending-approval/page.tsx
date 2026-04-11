@@ -17,9 +17,8 @@ export default function PendingApprovalPage() {
   const supabase = createClient();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    await supabase.auth.signOut({ scope: "global" });
+    window.location.href = "/login";
   };
 
   return (

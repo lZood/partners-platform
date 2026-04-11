@@ -23,6 +23,7 @@ import {
   CreditCard,
   UserPlus,
   Clock,
+  CalendarDays,
 } from "lucide-react";
 import {
   Card,
@@ -59,8 +60,58 @@ interface Props {
   extra: AdminDashboardExtra | null;
   partners: { id: string; name: string }[];
   currentPartnerId?: string;
+  currentDateFrom?: string;
+  currentDateTo?: string;
   userRole: string;
   userName: string;
+}
+
+type DatePreset = "this_month" | "last_month" | "this_quarter" | "this_year" | "last_3_months" | "last_6_months" | "custom";
+
+const datePresets: { value: DatePreset; label: string }[] = [
+  { value: "this_month", label: "Este Mes" },
+  { value: "last_month", label: "Mes Anterior" },
+  { value: "this_quarter", label: "Este Trimestre" },
+  { value: "last_3_months", label: "Ultimos 3 Meses" },
+  { value: "last_6_months", label: "Ultimos 6 Meses" },
+  { value: "this_year", label: "Este Ano" },
+  { value: "custom", label: "Personalizado" },
+];
+
+function getDateRange(preset: DatePreset): { from: string; to: string } | null {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+
+  switch (preset) {
+    case "this_month":
+      return null; // default behavior
+    case "last_month": {
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 0);
+      return { from: fmt(start), to: fmt(end) };
+    }
+    case "this_quarter": {
+      const qStart = new Date(y, Math.floor(m / 3) * 3, 1);
+      return { from: fmt(qStart), to: fmt(now) };
+    }
+    case "last_3_months": {
+      const start = new Date(y, m - 2, 1);
+      return { from: fmt(start), to: fmt(now) };
+    }
+    case "last_6_months": {
+      const start = new Date(y, m - 5, 1);
+      return { from: fmt(start), to: fmt(now) };
+    }
+    case "this_year":
+      return { from: `${y}-01-01`, to: fmt(now) };
+    default:
+      return null;
+  }
+}
+
+function fmt(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function useCountUp(end: number, duration: number = 0.8) {
@@ -219,6 +270,8 @@ export function DashboardClient({
   extra,
   partners,
   currentPartnerId,
+  currentDateFrom,
+  currentDateTo,
   userRole,
   userName,
 }: Props) {
@@ -227,10 +280,46 @@ export function DashboardClient({
   const { stats, monthlyTrends, productTypeProfitability, topProducts, recentReports } = data;
 
   const [selectedPartner, setSelectedPartner] = useState(currentPartnerId ?? "");
+  const [datePreset, setDatePreset] = useState<DatePreset>(
+    currentDateFrom ? "custom" : "this_month"
+  );
+  const [customFrom, setCustomFrom] = useState(currentDateFrom ?? "");
+  const [customTo, setCustomTo] = useState(currentDateTo ?? "");
+  const [showCustom, setShowCustom] = useState(false);
+
+  const buildUrl = (partner: string, from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (partner) params.set("partner", partner);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const qs = params.toString();
+    return qs ? `/?${qs}` : "/";
+  };
 
   const handlePartnerChange = (value: string) => {
-    setSelectedPartner(value);
-    router.push(value ? `/?partner=${value}` : "/");
+    const p = value === "all" ? "" : value;
+    setSelectedPartner(p);
+    const range = datePreset !== "this_month" ? getDateRange(datePreset) : null;
+    router.push(buildUrl(p, range?.from, range?.to));
+  };
+
+  const handleDatePresetChange = (value: string) => {
+    const preset = value as DatePreset;
+    setDatePreset(preset);
+    if (preset === "custom") {
+      setShowCustom(true);
+      return;
+    }
+    setShowCustom(false);
+    const range = getDateRange(preset);
+    router.push(buildUrl(selectedPartner, range?.from, range?.to));
+  };
+
+  const applyCustomRange = () => {
+    if (customFrom && customTo) {
+      router.push(buildUrl(selectedPartner, customFrom, customTo));
+      setShowCustom(false);
+    }
   };
 
   useEffect(() => {
@@ -260,23 +349,63 @@ export function DashboardClient({
 
   return (
     <div ref={containerRef} className="space-y-6">
-      {/* Partner selector */}
-      {isAdmin && partners.length > 1 && (
-        <div data-animate-card className="flex justify-end">
+      {/* Filters bar */}
+      {isAdmin && (
+        <div data-animate-card className="flex items-center justify-end gap-3 flex-wrap">
+          {/* Date range */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Partner:</span>
-            <Select value={selectedPartner || "all"} onValueChange={(v) => handlePartnerChange(v === "all" ? "" : v)}>
-              <SelectTrigger className="w-[180px]">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <Select value={datePreset} onValueChange={handleDatePresetChange}>
+              <SelectTrigger className="w-[170px] h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los Partners</SelectItem>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                {datePresets.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Custom date inputs */}
+          {showCustom && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-9 rounded-md border bg-card px-2 text-sm"
+              />
+              <span className="text-xs text-muted-foreground">a</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-9 rounded-md border bg-card px-2 text-sm"
+              />
+              <Button size="sm" variant="outline" onClick={applyCustomRange} disabled={!customFrom || !customTo}>
+                Aplicar
+              </Button>
+            </div>
+          )}
+
+          {/* Partner selector */}
+          {partners.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Partner:</span>
+              <Select value={selectedPartner || "all"} onValueChange={handlePartnerChange}>
+                <SelectTrigger className="w-[180px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los Partners</SelectItem>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
       )}
 
@@ -288,7 +417,9 @@ export function DashboardClient({
             <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">Ingresos Mes</span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {currentDateFrom ? "Ingresos Periodo" : "Ingresos Mes"}
+                  </span>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                     <DollarSign className="h-4 w-4" />
                   </div>
@@ -297,7 +428,7 @@ export function DashboardClient({
                 {(stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0) && (
                   <p className={`text-xs flex items-center gap-1 mt-1 ${momColor}`}>
                     <MomIcon className="h-3 w-3" />
-                    {momChange > 0 ? "+" : ""}{momChange.toFixed(1)}% vs anterior
+                    {momChange > 0 ? "+" : ""}{momChange.toFixed(1)}% vs periodo anterior
                   </p>
                 )}
               </CardContent>
@@ -319,7 +450,9 @@ export function DashboardClient({
             <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">Pagado este Mes</span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {currentDateFrom ? "Pagado Periodo" : "Pagado este Mes"}
+                  </span>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-green-600">
                     <CreditCard className="h-4 w-4" />
                   </div>

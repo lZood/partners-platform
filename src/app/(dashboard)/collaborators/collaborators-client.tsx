@@ -13,6 +13,9 @@ import {
   ChevronRight,
   Download,
   Clock,
+  CheckSquare,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +43,7 @@ import {
 import {
   createCollaborator,
   assignUserToPartner,
+  toggleCollaboratorActive,
 } from "@/actions/users";
 import { useToast } from "@/components/shared/toast-provider";
 import { displayName } from "@/lib/utils";
@@ -111,6 +115,11 @@ export function CollaboratorsClient({
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
+  // Bulk selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const cards = containerRef.current.querySelectorAll("[data-animate-card]");
@@ -180,6 +189,42 @@ export function CollaboratorsClient({
     return `${Math.floor(days / 30)}mes`;
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((u) => u.id)));
+    }
+  };
+
+  const handleBulkToggle = async (activate: boolean) => {
+    setBulkLoading(true);
+    const promises = Array.from(selectedIds).map((id) =>
+      toggleCollaboratorActive(id, activate)
+    );
+    await Promise.allSettled(promises);
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    showToast(
+      `${selectedIds.size} colaborador(es) ${activate ? "activados" : "desactivados"}`,
+      "success"
+    );
+    router.refresh();
+  };
+
+  const handleExport = () => {
+    window.open("/api/collaborators/export", "_blank");
+  };
+
   return (
     <div ref={containerRef} className="space-y-6">
       {/* Header */}
@@ -188,6 +233,23 @@ export function CollaboratorsClient({
           <h1 className="text-3xl font-bold tracking-tight">Colaboradores</h1>
           <p className="text-muted-foreground">Gestiona colaboradores y perfiles virtuales.</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            <Download className="mr-1.5 h-4 w-4" /> Exportar
+          </Button>
+          {isSuperAdmin && (
+            <Button
+              variant={selectionMode ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setSelectionMode(!selectionMode);
+                setSelectedIds(new Set());
+              }}
+            >
+              <CheckSquare className="mr-1.5 h-4 w-4" />
+              {selectionMode ? "Cancelar" : "Seleccionar"}
+            </Button>
+          )}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Nuevo
@@ -249,7 +311,40 @@ export function CollaboratorsClient({
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <Card data-animate-card className="border-0 shadow-sm">
+          <CardContent className="flex items-center gap-3 p-3">
+            <button onClick={selectAll} className="text-xs text-primary hover:underline">
+              {selectedIds.size === filtered.length ? "Deseleccionar todos" : "Seleccionar todos"}
+            </button>
+            <span className="text-xs text-muted-foreground">{selectedIds.size} seleccionado(s)</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleBulkToggle(true)}
+                disabled={bulkLoading}
+              >
+                <UserCheck className="mr-1.5 h-3.5 w-3.5 text-green-600" />
+                Activar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleBulkToggle(false)}
+                disabled={bulkLoading}
+              >
+                <UserX className="mr-1.5 h-3.5 w-3.5 text-destructive" />
+                Desactivar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Unassigned alert */}
       {unassignedUsers.length > 0 && (
@@ -408,9 +503,24 @@ export function CollaboratorsClient({
                 key={user.id}
                 data-animate-card
                 className="border-0 shadow-sm transition-card hover-lift cursor-pointer group"
-                onClick={() => router.push(`/collaborators/${user.id}`)}
+                onClick={() => {
+                  if (selectionMode) {
+                    toggleSelect(user.id);
+                  } else {
+                    router.push(`/collaborators/${user.id}`);
+                  }
+                }}
               >
                 <CardContent className="flex items-center gap-4 p-4">
+                  {selectionMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(user.id)}
+                      onChange={() => toggleSelect(user.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 rounded border-border accent-primary shrink-0"
+                    />
+                  )}
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold overflow-hidden">
                     {user.avatar_url ? (
                       <img src={user.avatar_url} alt={user.name} className="h-full w-full object-cover" />

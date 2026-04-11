@@ -125,15 +125,31 @@ const MONTH_LABELS = [
 ];
 
 export async function getDashboardData(
-  partnerId?: string
+  partnerId?: string,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<{ success: true; data: DashboardData } | { success: false; error: string }> {
   try {
     const supabase = createServerSupabaseClient();
 
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-01`;
+    const currentMonth = dateFrom
+      ? dateFrom.substring(0, 7) + "-01"
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+    // Calculate previous period of same length for comparison
+    let previousMonth: string;
+    if (dateFrom && dateTo) {
+      const from = new Date(dateFrom + "T00:00:00");
+      const to = new Date(dateTo + "T00:00:00");
+      const diffMs = to.getTime() - from.getTime();
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - diffMs);
+      previousMonth = `${prevFrom.getFullYear()}-${String(prevFrom.getMonth() + 1).padStart(2, "0")}-01`;
+    } else {
+      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      previousMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}-01`;
+    }
 
     // ── Fetch reports ────────────────────────────────────────────────
     let reportsQuery = supabase
@@ -141,8 +157,30 @@ export async function getDashboardData(
       .select("id, report_month, total_usd, total_mxn, is_locked, created_at, partner_id, partners (name)")
       .order("report_month", { ascending: false });
     if (partnerId) reportsQuery = reportsQuery.eq("partner_id", partnerId);
+    if (dateFrom) reportsQuery = reportsQuery.gte("report_month", dateFrom);
+    if (dateTo) reportsQuery = reportsQuery.lte("report_month", dateTo + "T23:59:59");
     const { data: rawReports } = await reportsQuery;
     const allReports = (rawReports ?? []) as any[];
+
+    // Fetch previous period reports for comparison
+    let prevReports: any[] = [];
+    if (dateFrom && dateTo) {
+      const from = new Date(dateFrom + "T00:00:00");
+      const to = new Date(dateTo + "T00:00:00");
+      const diffMs = to.getTime() - from.getTime();
+      const prevTo = new Date(from.getTime() - 1);
+      const prevFrom = new Date(prevTo.getTime() - diffMs);
+      const prevFromStr = prevFrom.toISOString().split("T")[0];
+      const prevToStr = prevTo.toISOString().split("T")[0];
+      let prevQuery = supabase
+        .from("monthly_reports")
+        .select("total_usd")
+        .gte("report_month", prevFromStr)
+        .lte("report_month", prevToStr + "T23:59:59");
+      if (partnerId) prevQuery = prevQuery.eq("partner_id", partnerId);
+      const { data } = await prevQuery;
+      prevReports = data ?? [];
+    }
 
     // ── Active products ──────────────────────────────────────────────
     let productsQuery = supabase
@@ -163,13 +201,28 @@ export async function getDashboardData(
     ).size;
 
     // ── Stats ────────────────────────────────────────────────────────
-    const currentMonthReport = allReports.find((r) => r.report_month === currentMonth);
-    const previousMonthReport = allReports.find((r) => r.report_month === previousMonth);
+    let periodUsd: number;
+    let periodMxn: number;
+    let previousPeriodUsd: number;
+
+    if (dateFrom && dateTo) {
+      // Date range mode: sum all reports in range
+      periodUsd = allReports.reduce((s, r) => s + Number(r.total_usd ?? 0), 0);
+      periodMxn = allReports.reduce((s, r) => s + Number(r.total_mxn ?? 0), 0);
+      previousPeriodUsd = prevReports.reduce((s: number, r: any) => s + Number(r.total_usd ?? 0), 0);
+    } else {
+      // Default: current month vs previous month
+      const currentMonthReport = allReports.find((r) => r.report_month === currentMonth);
+      const previousMonthReport = allReports.find((r) => r.report_month === previousMonth);
+      periodUsd = Number(currentMonthReport?.total_usd ?? 0);
+      periodMxn = Number(currentMonthReport?.total_mxn ?? 0);
+      previousPeriodUsd = Number(previousMonthReport?.total_usd ?? 0);
+    }
 
     const stats: DashboardStats = {
-      currentMonthUsd: Number(currentMonthReport?.total_usd ?? 0),
-      currentMonthMxn: Number(currentMonthReport?.total_mxn ?? 0),
-      previousMonthUsd: Number(previousMonthReport?.total_usd ?? 0),
+      currentMonthUsd: Math.round(periodUsd * 100) / 100,
+      currentMonthMxn: Math.round(periodMxn * 100) / 100,
+      previousMonthUsd: Math.round(previousPeriodUsd * 100) / 100,
       activeProducts: productCount ?? 0,
       activeCollaborators: uniqueCollaborators,
       totalReports: allReports.length,
@@ -272,12 +325,15 @@ export async function getDashboardData(
  * Get extra dashboard data for admin/super_admin roles.
  */
 export async function getAdminDashboardExtra(
-  partnerId?: string
+  partnerId?: string,
+  dateFrom?: string,
+  dateTo?: string
 ): Promise<{ success: true; data: AdminDashboardExtra } | { success: false; error: string }> {
   try {
     const supabase = createServerSupabaseClient();
     const now = new Date();
-    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const monthStart = dateFrom ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const periodEnd = dateTo ? dateTo + "T23:59:59" : undefined;
 
     // Total pending payments (all unpaid report earnings)
     let lineItemsQuery = supabase
@@ -339,11 +395,12 @@ export async function getAdminDashboardExtra(
       });
     }
 
-    // Total paid this month
+    // Total paid in period
     let paymentsQuery = supabase
       .from("payments")
       .select("total_usd")
       .gte("paid_at", monthStart);
+    if (periodEnd) paymentsQuery = paymentsQuery.lte("paid_at", periodEnd);
     if (partnerId) paymentsQuery = paymentsQuery.eq("partner_id", partnerId);
     const { data: monthPayments } = await paymentsQuery;
     const totalPaidThisMonth = (monthPayments ?? []).reduce((s, p: any) => s + Number(p.total_usd ?? 0), 0);

@@ -13,6 +13,8 @@ import { DashboardSkeleton } from "./dashboard-skeleton";
 interface PageProps {
   searchParams: Promise<{
     partner?: string;
+    from?: string;
+    to?: string;
   }>;
 }
 
@@ -75,11 +77,13 @@ async function DashboardContent({ searchParams }: PageProps) {
   }
 
   const partnerId = params.partner;
+  const dateFrom = params.from;
+  const dateTo = params.to;
 
   // Fetch base + extra data in parallel
   const [baseResult, extraResult] = await Promise.all([
-    getDashboardData(partnerId),
-    getAdminDashboardExtra(partnerId),
+    getDashboardData(partnerId, dateFrom, dateTo),
+    getAdminDashboardExtra(partnerId, dateFrom, dateTo),
   ]);
 
   if (!baseResult.success) {
@@ -92,6 +96,8 @@ async function DashboardContent({ searchParams }: PageProps) {
       extra={extraResult.success ? extraResult.data : null}
       partners={partners}
       currentPartnerId={partnerId}
+      currentDateFrom={dateFrom}
+      currentDateTo={dateTo}
       userRole={userRole}
       userName={userName}
     />

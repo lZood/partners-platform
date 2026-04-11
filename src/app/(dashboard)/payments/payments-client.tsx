@@ -12,6 +12,8 @@ import {
   DollarSign,
   Users,
   Download,
+  CheckSquare,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +52,8 @@ export function PaymentsClient({
   const [selectedPartner, setSelectedPartner] = useState(
     currentPartnerId ?? ""
   );
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -65,6 +69,29 @@ export function PaymentsClient({
     setSelectedPartner(value);
     router.push(value ? `/payments?partner=${value}` : "/payments");
   };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // Only show collaborators with pending amounts in selection
+  const pendingCollabs = summaries.filter((s) => s.totalPendingUsd > 0);
+
+  const selectAllPending = () => {
+    if (selectedIds.size === pendingCollabs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingCollabs.map((s) => s.userId)));
+    }
+  };
+
+  const selectedTotal = summaries
+    .filter((s) => selectedIds.has(s.userId))
+    .reduce((sum, s) => sum + s.totalPendingUsd, 0);
 
   const filtered = summaries.filter((s) =>
     s.userName.toLowerCase().includes(search.toLowerCase())
@@ -112,7 +139,18 @@ export function PaymentsClient({
             }}
           >
             <Download className="mr-2 h-4 w-4" />
-            Exportar Excel
+            Exportar
+          </Button>
+          <Button
+            variant={selectionMode ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => {
+              setSelectionMode(!selectionMode);
+              setSelectedIds(new Set());
+            }}
+          >
+            <CheckSquare className="mr-1.5 h-4 w-4" />
+            {selectionMode ? "Cancelar" : "Pago Masivo"}
           </Button>
           {partners.length > 1 && (
             <div className="flex items-center gap-1.5">
@@ -183,6 +221,40 @@ export function PaymentsClient({
         />
       </div>
 
+      {/* Bulk action bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <Card data-animate-card className="border-0 shadow-sm">
+          <CardContent className="flex items-center gap-3 p-3">
+            <button onClick={selectAllPending} className="text-xs text-primary hover:underline">
+              {selectedIds.size === pendingCollabs.length ? "Deseleccionar todos" : "Seleccionar todos con pendiente"}
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {selectedIds.size} seleccionado(s) · Total: <span className="font-medium text-foreground">{formatUSD(selectedTotal)}</span>
+            </span>
+            <div className="ml-auto">
+              <Button
+                size="sm"
+                onClick={() => {
+                  // Navigate to each selected collaborator's payment page sequentially
+                  // For now, open each in a new sequence
+                  const ids = Array.from(selectedIds);
+                  if (ids.length === 1) {
+                    router.push(`/payments/${ids[0]}`);
+                  } else {
+                    // Store selected IDs and open first one
+                    sessionStorage.setItem("bulk-payment-queue", JSON.stringify(ids));
+                    router.push(`/payments/${ids[0]}?bulk=true`);
+                  }
+                }}
+              >
+                <CreditCard className="mr-1.5 h-4 w-4" />
+                Registrar Pagos ({selectedIds.size})
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Collaborator cards */}
       {filtered.length === 0 ? (
         <Card className="border-0 shadow-sm">
@@ -200,9 +272,25 @@ export function PaymentsClient({
               key={collab.userId}
               data-animate-card
               className="border-0 shadow-sm transition-card hover-lift cursor-pointer group"
-              onClick={() => router.push(`/payments/${collab.userId}`)}
+              onClick={() => {
+                if (selectionMode && collab.totalPendingUsd > 0) {
+                  toggleSelect(collab.userId);
+                } else {
+                  router.push(`/payments/${collab.userId}`);
+                }
+              }}
             >
               <CardContent className="flex items-center gap-4 p-4">
+                {/* Checkbox */}
+                {selectionMode && collab.totalPendingUsd > 0 && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(collab.userId)}
+                    onChange={() => toggleSelect(collab.userId)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-4 w-4 rounded border-border accent-primary shrink-0"
+                  />
+                )}
                 {/* Avatar */}
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold overflow-hidden">
                   {collab.avatarUrl ? (

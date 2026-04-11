@@ -202,10 +202,10 @@ export default function SetPasswordPage() {
 
     setTimeout(async () => {
       if (isPasswordChange) {
-        await supabase.auth.signOut();
-        router.push("/login");
+        await supabase.auth.signOut({ scope: "global" });
+        window.location.href = "/login";
       } else {
-        router.push("/");
+        window.location.href = "/";
       }
     }, 2000);
   };

@@ -116,9 +116,9 @@ export function Sidebar({
   const { theme, setTheme, resolvedTheme } = useTheme();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+    await supabase.auth.signOut({ scope: "global" });
+    // Force a hard navigation to clear Next.js router cache completely
+    window.location.href = "/login";
   };
 
   const filteredNav = navigation.filter((item) =>

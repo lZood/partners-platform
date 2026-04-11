@@ -23,6 +23,8 @@ import {
   Columns,
   ChevronUp,
   ChevronDown,
+  Download,
+  CheckSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -168,6 +170,11 @@ export function ProductsClient({
 
   const isAdmin = userRole === "super_admin" || userRole === "admin";
 
+  // Bulk selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   // Column visibility (persisted in localStorage, hydration-safe)
   const defaultCols = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(defaultCols);
@@ -275,6 +282,38 @@ export function ProductsClient({
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllProducts = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((p: any) => p.id)));
+    }
+  };
+
+  const handleBulkProductToggle = async (activate: boolean) => {
+    setBulkLoading(true);
+    const promises = Array.from(selectedIds).map((id) =>
+      toggleProductActive(id, activate)
+    );
+    await Promise.allSettled(promises);
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    showToast(
+      `${selectedIds.size} producto(s) ${activate ? "activados" : "desactivados"}`,
+      "success"
+    );
+    router.refresh();
+  };
+
   // Helper to get collaborator's share in a product
   const getMyShare = (product: any) => {
     const dist = (product.product_distributions ?? []).find((d: any) => d.user_id === userId);
@@ -299,6 +338,21 @@ export function ProductsClient({
         </div>
 
         {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.open("/api/products/export", "_blank")}>
+              <Download className="mr-1.5 h-4 w-4" /> Exportar
+            </Button>
+            <Button
+              variant={selectionMode ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setSelectionMode(!selectionMode);
+                setSelectedIds(new Set());
+              }}
+            >
+              <CheckSquare className="mr-1.5 h-4 w-4" />
+              {selectionMode ? "Cancelar" : "Seleccionar"}
+            </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <Button onClick={() => { setEditingProduct(null); setFormPartnerId(""); setFormTypeId(""); setDialogOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />
@@ -351,6 +405,7 @@ export function ProductsClient({
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 
@@ -478,6 +533,38 @@ export function ProductsClient({
         </span>
       </div>
 
+      {/* Bulk action bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="flex items-center gap-3 p-3">
+            <button onClick={selectAllProducts} className="text-xs text-primary hover:underline">
+              {selectedIds.size === filtered.length ? "Deseleccionar todos" : "Seleccionar todos"}
+            </button>
+            <span className="text-xs text-muted-foreground">{selectedIds.size} seleccionado(s)</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleBulkProductToggle(true)}
+                disabled={bulkLoading}
+              >
+                <ToggleRight className="mr-1.5 h-3.5 w-3.5 text-green-600" />
+                Activar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleBulkProductToggle(false)}
+                disabled={bulkLoading}
+              >
+                <ToggleLeft className="mr-1.5 h-3.5 w-3.5 text-destructive" />
+                Desactivar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Mobile card view */}
       <div className="space-y-2 md:hidden">
         {filtered.length === 0 ? (
@@ -494,9 +581,20 @@ export function ProductsClient({
             const revenue = revenueSummaries[product.id];
             const lifecycle = LIFECYCLE_LABELS[product.lifecycle_status] ?? LIFECYCLE_LABELS.active;
             return (
-              <Card key={product.id} className="border-0 shadow-sm" onClick={() => router.push(`/products/${product.id}`)}>
+              <Card key={product.id} className="border-0 shadow-sm" onClick={() => {
+                if (selectionMode) { toggleSelect(product.id); } else { router.push(`/products/${product.id}`); }
+              }}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
+                    {selectionMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(product.id)}
+                        onChange={() => toggleSelect(product.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 rounded border-border accent-primary shrink-0"
+                      />
+                    )}
                     {product.image_url ? (
                       <img src={product.image_url} alt={product.name} className="h-10 w-10 rounded-lg object-cover shrink-0" />
                     ) : (
@@ -553,6 +651,16 @@ export function ProductsClient({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left">
+                    {selectionMode && (
+                      <th className="p-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size === filtered.length && filtered.length > 0}
+                          onChange={selectAllProducts}
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                      </th>
+                    )}
                     {isColVisible("name") && (
                       <th className="p-3 font-medium text-muted-foreground">
                         <button onClick={() => toggleSort("name")} className="flex items-center gap-1">Producto <SortIcon field="name" /></button>
@@ -589,7 +697,18 @@ export function ProductsClient({
                     const revenue = revenueSummaries[product.id];
                     const lifecycle = LIFECYCLE_LABELS[product.lifecycle_status] ?? LIFECYCLE_LABELS.active;
                     return (
-                      <tr key={product.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                      <tr key={product.id} className={`border-b last:border-0 hover:bg-muted/50 transition-colors ${selectionMode ? "cursor-pointer" : ""}`} onClick={selectionMode ? () => toggleSelect(product.id) : undefined}>
+                        {selectionMode && (
+                          <td className="p-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(product.id)}
+                              onChange={() => toggleSelect(product.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-4 w-4 rounded border-border accent-primary"
+                            />
+                          </td>
+                        )}
                         {isColVisible("name") && (
                           <td className="p-3">
                             <div className="flex items-center gap-3">

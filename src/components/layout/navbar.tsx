@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { SearchModal } from "@/components/layout/search-modal";
 import {
   Search,
@@ -20,7 +21,7 @@ import {
   markAllAsRead,
   type AppNotification,
 } from "@/actions/notifications";
-import { displayName } from "@/lib/utils";
+import { useToast } from "@/components/shared/toast-provider";
 
 interface NavbarProps {
   userName?: string;
@@ -54,6 +55,8 @@ export function Navbar({
   unreadCount = 0,
 }: NavbarProps) {
   const router = useRouter();
+  const { showToast } = useToast();
+  const supabase = createClient();
   const [searchOpen, setSearchOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
 
@@ -68,22 +71,92 @@ export function Navbar({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [localUnread, setLocalUnread] = useState(unreadCount);
   const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const hasLoadedRef = useRef(false);
+
+  // ── Supabase Realtime: listen for new notifications ──
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const n = payload.new as any;
+          const newNotif: AppNotification = {
+            id: n.id,
+            userId: n.user_id,
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            link: n.link,
+            isRead: n.is_read ?? false,
+            createdAt: n.created_at,
+          };
+
+          // Add to top of list
+          setNotifications((prev) => [newNotif, ...prev]);
+          setLocalUnread((c) => c + 1);
+
+          // Show toast
+          showToast(n.title, "info");
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const n = payload.new as any;
+          setNotifications((prev) =>
+            prev.map((notif) =>
+              notif.id === n.id
+                ? { ...notif, isRead: n.is_read ?? notif.isRead }
+                : notif
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   const openPanel = async () => {
     setPanelOpen(true);
-    if (notifications.length === 0) {
+    if (!hasLoadedRef.current) {
       setLoadingNotifs(true);
-      const data = await getNotifications(userId, 15);
+      const data = await getNotifications(userId, 20);
       setNotifications(data);
+      hasLoadedRef.current = true;
       setLoadingNotifs(false);
     }
   };
 
   const handleMarkRead = async (notif: AppNotification) => {
-    if (notif.isRead) return;
+    if (notif.isRead) {
+      if (notif.link) {
+        setPanelOpen(false);
+        router.push(notif.link);
+      }
+      return;
+    }
     await markAsRead(notif.id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
@@ -153,7 +226,9 @@ export function Navbar({
               <div className="absolute right-0 top-full z-50 mt-2 w-80 sm:w-96 rounded-xl border bg-card shadow-xl">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b px-4 py-3">
-                  <h3 className="text-sm font-semibold">Notificaciones</h3>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Notificaciones
+                  </h3>
                   {localUnread > 0 && (
                     <button
                       onClick={handleMarkAllRead}
@@ -203,7 +278,7 @@ export function Navbar({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p
-                                className={`text-xs leading-relaxed ${
+                                className={`text-sm leading-snug ${
                                   !notif.isRead
                                     ? "font-medium text-foreground"
                                     : "text-muted-foreground"
@@ -215,7 +290,7 @@ export function Navbar({
                                 <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
                               )}
                             </div>
-                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                               {notif.message}
                             </p>
                           </div>
