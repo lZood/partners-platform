@@ -1,9 +1,26 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import { getProductsRevenueSummary } from "@/actions/product-analytics";
 import { ProductsClient } from "./products-client";
 
 export default async function ProductsPage() {
   const supabase = createServerSupabaseClient();
+
+  // Get current user info
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("id, user_partner_roles (role, partner_id)")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  const roles = (appUser?.user_partner_roles as any[]) ?? [];
+  const userRole = roles[0]?.role ?? "collaborator";
+  const userId = appUser?.id ?? "";
 
   // Fetch products with distributions and types
   const { data: products } = await supabase
@@ -13,12 +30,16 @@ export default async function ProductsPage() {
       id,
       name,
       description,
+      image_url,
+      lifecycle_status,
       is_active,
       created_at,
       partner_id,
       product_type_id,
+      category_id,
       partners (id, name),
       product_types (id, name),
+      product_categories (id, name),
       product_distributions (
         id,
         user_id,
@@ -42,7 +63,7 @@ export default async function ProductsPage() {
     .order("name");
 
   // Enrich products with distribution validation
-  const enriched = (products ?? []).map((p: any) => {
+  let enriched = (products ?? []).map((p: any) => {
     const total = (p.product_distributions ?? []).reduce(
       (sum: number, d: any) => sum + Number(d.percentage_share),
       0
@@ -54,11 +75,17 @@ export default async function ProductsPage() {
     };
   });
 
+  // For collaborators: only show products where they have a distribution
+  if (userRole === "collaborator") {
+    enriched = enriched.filter((p: any) =>
+      (p.product_distributions ?? []).some((d: any) => d.user_id === userId)
+    );
+  }
+
   // Get revenue summaries for all products
   const productIds = enriched.map((p: any) => p.id);
   const revenueResult = await getProductsRevenueSummary(productIds);
 
-  // Convert Map to plain object for serialization
   let revenueSummaries: Record<string, any> = {};
   if (revenueResult.success) {
     Array.from(revenueResult.data.entries()).forEach(([key, value]) => {
@@ -72,6 +99,8 @@ export default async function ProductsPage() {
       productTypes={productTypes ?? []}
       partners={partners ?? []}
       revenueSummaries={revenueSummaries}
+      userRole={userRole}
+      userId={userId}
     />
   );
 }

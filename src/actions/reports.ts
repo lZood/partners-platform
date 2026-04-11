@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { applyCascadeTaxes } from "@/lib/calculations/cascade-tax";
+import { createNotificationsBatch } from "@/actions/notifications";
+import { sendReportNotificationEmail } from "@/lib/email";
 
 export type ActionResult = {
   success: boolean;
@@ -258,6 +260,59 @@ export async function generateReport(
     created_by: appUser.id,
     processed_at: new Date().toISOString(),
   });
+
+  // 9. Notify affected users
+  try {
+    // Get unique user IDs from line items
+    const affectedUserIds = [...new Set(lineItems.map((li: any) => li.user_id))];
+    if (affectedUserIds.length > 0) {
+      // Get user details for email
+      const { data: affectedUsers } = await supabase
+        .from("users")
+        .select("id, name, email")
+        .in("id", affectedUserIds);
+
+      // Get partner name
+      const { data: partnerInfo } = await supabase
+        .from("partners")
+        .select("name")
+        .eq("id", partnerId)
+        .single();
+      const pName = (partnerInfo as any)?.name ?? "Partner";
+
+      const monthLabel = new Date(reportMonth + "T00:00:00").toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+
+      // Create in-app notifications
+      const notifications = affectedUserIds.map((uid: string) => {
+        const userItems = lineItems.filter((li: any) => li.user_id === uid);
+        const userTotal = userItems.reduce((s: number, li: any) => s + Number(li.final_usd ?? 0), 0);
+        return {
+          userId: uid,
+          type: "report_generated" as const,
+          title: "Nuevo reporte de ganancias",
+          message: `Se genero un reporte para ${pName} (${monthLabel}). Tus ganancias: $${userTotal.toFixed(2)} USD.`,
+          link: `/my-earnings`,
+        };
+      });
+      await createNotificationsBatch(notifications);
+
+      // Send emails (non-blocking)
+      for (const u of (affectedUsers ?? []) as any[]) {
+        if (!u.email) continue;
+        const userItems = lineItems.filter((li: any) => li.user_id === u.id);
+        const userTotal = userItems.reduce((s: number, li: any) => s + Number(li.final_usd ?? 0), 0);
+        sendReportNotificationEmail({
+          to: u.email,
+          userName: u.name,
+          reportMonth: monthLabel,
+          partnerName: pName,
+          totalUsd: userTotal,
+        }).catch((err) => console.error("Email failed for", u.email, err));
+      }
+    }
+  } catch (notifError) {
+    console.error("Notification error (non-fatal):", notifError);
+  }
 
   revalidatePath("/reports");
   revalidatePath("/");

@@ -1,27 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import gsap from "gsap";
 import {
   Users,
   Plus,
-  Pencil,
-  ToggleLeft,
-  ToggleRight,
+  Search,
   User,
   Ghost,
-  Trash2,
-  Mail,
-  AlertTriangle,
-  Building2,
+  AlertCircle,
+  ChevronRight,
+  Download,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -43,14 +39,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   createCollaborator,
-  updateCollaborator,
-  toggleCollaboratorActive,
-  updateUserRole,
   assignUserToPartner,
-  resendInvitation,
-  deleteUser,
 } from "@/actions/users";
 import { useToast } from "@/components/shared/toast-provider";
+import { displayName } from "@/lib/utils";
 
 interface UserPartnerRole {
   id: string;
@@ -67,12 +59,9 @@ interface AppUser {
   is_active: boolean;
   created_at: string;
   auth_user_id: string | null;
+  avatar_url: string | null;
+  lastActivity: string | null;
   user_partner_roles: UserPartnerRole[];
-}
-
-interface Partner {
-  id: string;
-  name: string;
 }
 
 interface UnassignedUser {
@@ -84,10 +73,16 @@ interface UnassignedUser {
 
 interface Props {
   initialUsers: AppUser[];
-  partners: Partner[];
+  partners: { id: string; name: string }[];
   unassignedUsers: UnassignedUser[];
   isSuperAdmin: boolean;
 }
+
+const roleLabels: Record<string, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  collaborator: "Colaborador",
+};
 
 export function CollaboratorsClient({
   initialUsers,
@@ -97,887 +92,367 @@ export function CollaboratorsClient({
 }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [userType, setUserType] = useState<string>("virtual_profile");
-  const [skipInvite, setSkipInvite] = useState(false);
 
-  // Delete confirmation
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<AppUser | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [userType, setUserType] = useState("virtual_profile");
+  const [createPartnerId, setCreatePartnerId] = useState(partners[0]?.id ?? "");
+  const [createRole, setCreateRole] = useState("collaborator");
 
-  // Resend loading state per user
-  const [resendingFor, setResendingFor] = useState<string | null>(null);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignPartnerId, setAssignPartnerId] = useState(partners[0]?.id ?? "");
+  const [assignRole, setAssignRole] = useState("collaborator");
 
-  // Reject unassigned user
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [userToReject, setUserToReject] = useState<UnassignedUser | null>(null);
-  const [rejectLoading, setRejectLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterPartner, setFilterPartner] = useState("");
+  const [filterRole, setFilterRole] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
-  // Add partner to existing user
-  const [addPartnerDialogOpen, setAddPartnerDialogOpen] = useState(false);
-  const [addPartnerUser, setAddPartnerUser] = useState<AppUser | null>(null);
-  const [addPartnerLoading, setAddPartnerLoading] = useState(false);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const cards = containerRef.current.querySelectorAll("[data-animate-card]");
+    gsap.fromTo(cards, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.04, ease: "power2.out" });
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const filtered = useMemo(() => {
+    let list = [...initialUsers];
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((u) => u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q));
+    }
+    if (filterPartner) list = list.filter((u) => u.user_partner_roles.some((r) => r.partner_id === filterPartner));
+    if (filterRole) list = list.filter((u) => u.user_partner_roles.some((r) => r.role === filterRole));
+    if (filterType) list = list.filter((u) => u.user_type === filterType);
+    if (filterStatus === "active") list = list.filter((u) => u.is_active);
+    if (filterStatus === "inactive") list = list.filter((u) => !u.is_active && u.user_type !== "system_user");
+    if (filterStatus === "pending") list = list.filter((u) => !u.is_active && u.user_type === "system_user");
+    return list;
+  }, [initialUsers, search, filterPartner, filterRole, filterType, filterStatus]);
+
+  const activeCount = initialUsers.filter((u) => u.is_active).length;
+  const systemCount = initialUsers.filter((u) => u.user_type === "system_user").length;
+
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-
     const formData = new FormData(e.currentTarget);
     formData.set("userType", userType);
-    if (skipInvite && userType === "system_user" && !editingUser) {
-      formData.set("skipInvite", "true");
-    }
-
-    let result;
-
-    if (editingUser) {
-      result = await updateCollaborator(editingUser.id, formData);
-    } else {
-      result = await createCollaborator(formData);
-    }
-
+    formData.set("partnerId", createPartnerId);
+    formData.set("role", createRole);
+    const result = await createCollaborator(formData);
     setLoading(false);
-
     if (result.success) {
-      const name = formData.get("name");
-      const wasSkipped = skipInvite && userType === "system_user" && !editingUser;
-      const emailWarn = result.data?.emailWarning;
-
-      if (editingUser) {
-        showToast(`Colaborador "${name}" actualizado`, "success");
-      } else if (wasSkipped) {
-        showToast(
-          `Colaborador "${name}" creado sin invitacion. Usa el boton de correo para enviarla.`,
-          "success"
-        );
-      } else if (emailWarn) {
-        showToast(
-          `Colaborador "${name}" creado, pero no se pudo enviar el email: ${emailWarn}. Puedes reenviar despues.`,
-          "error"
-        );
-      } else {
-        showToast(
-          `Colaborador "${name}" creado. Se envio invitacion por email.`,
-          "success"
-        );
-      }
-      setDialogOpen(false);
-      setEditingUser(null);
-      setSkipInvite(false);
-      router.refresh();
-    } else {
-      showToast(result.error ?? "Error desconocido", "error");
-    }
-  };
-
-  const handleToggleActive = async (user: AppUser) => {
-    const result = await toggleCollaboratorActive(user.id, !user.is_active);
-    if (result.success) {
-      showToast(
-        user.is_active
-          ? `"${user.name}" desactivado`
-          : `"${user.name}" activado`,
-        "success"
-      );
+      showToast("Colaborador creado", "success");
+      setCreateOpen(false);
       router.refresh();
     } else {
       showToast(result.error ?? "Error", "error");
     }
   };
 
-  const handleRoleChange = async (
-    userId: string,
-    partnerId: string,
-    newRole: string
-  ) => {
-    const result = await updateUserRole(
-      userId,
-      partnerId,
-      newRole as "super_admin" | "admin" | "collaborator"
-    );
-    if (result.success) {
-      showToast("Rol actualizado", "success");
-      router.refresh();
-    } else {
-      showToast(result.error ?? "Error", "error");
-    }
-  };
-
-  const handleResendInvitation = async (user: AppUser) => {
-    setResendingFor(user.id);
-    const result = await resendInvitation(user.id);
-    setResendingFor(null);
-
-    if (result.success) {
-      showToast(
-        `Invitacion reenviada a ${result.data?.email ?? user.email}`,
-        "success"
-      );
-      router.refresh();
-    } else {
-      showToast(result.error ?? "Error al reenviar", "error");
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!userToDelete) return;
-    setDeleteLoading(true);
-    const result = await deleteUser(userToDelete.id);
-    setDeleteLoading(false);
-
-    if (result.success) {
-      showToast(`"${result.data?.name ?? userToDelete.name}" eliminado`, "success");
-      setDeleteDialogOpen(false);
-      setUserToDelete(null);
-      router.refresh();
-    } else {
-      showToast(result.error ?? "Error al eliminar", "error");
-    }
-  };
-
-  const openEdit = (user: AppUser) => {
-    setEditingUser(user);
-    setUserType(user.user_type);
-    setDialogOpen(true);
-  };
-
-  const openCreate = () => {
-    setEditingUser(null);
-    setUserType("virtual_profile");
-    setSkipInvite(false);
-    setDialogOpen(true);
-  };
-
-  const openDeleteDialog = (user: AppUser) => {
-    setUserToDelete(user);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleAddPartner = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!addPartnerUser) return;
-    setAddPartnerLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const partnerId = formData.get("newPartnerId") as string;
-    const role = (formData.get("newPartnerRole") as string) || "collaborator";
-
-    if (!partnerId) {
-      showToast("Selecciona un partner", "error");
-      setAddPartnerLoading(false);
-      return;
-    }
-
-    const result = await assignUserToPartner(
-      addPartnerUser.id,
-      partnerId,
-      role as "super_admin" | "admin" | "collaborator"
-    );
-    setAddPartnerLoading(false);
-
-    if (result.success) {
-      showToast(`Partner asignado a "${addPartnerUser.name}"`, "success");
-      setAddPartnerDialogOpen(false);
-      setAddPartnerUser(null);
-      router.refresh();
-    } else {
-      showToast(result.error ?? "Error al asignar", "error");
-    }
-  };
-
-  const handleRejectConfirm = async () => {
-    if (!userToReject) return;
-    setRejectLoading(true);
-    const result = await deleteUser(userToReject.id);
-    setRejectLoading(false);
-
-    if (result.success) {
-      showToast(`Solicitud de "${userToReject.name}" rechazada`, "success");
-      setRejectDialogOpen(false);
-      setUserToReject(null);
-      router.refresh();
-    } else {
-      showToast(result.error ?? "Error al rechazar", "error");
-    }
-  };
-
-  // Assign unassigned user to a partner
-  const handleAssign = async (userId: string, form: HTMLFormElement) => {
-    const formData = new FormData(form);
-    const partnerId = formData.get("assignPartnerId") as string;
-    const role = (formData.get("assignRole") as string) || "collaborator";
-
-    if (!partnerId) {
-      showToast("Selecciona un partner", "error");
-      return;
-    }
-
+  const handleAssign = async () => {
+    if (!assignUserId || !assignPartnerId) return;
     setLoading(true);
-    const result = await assignUserToPartner(
-      userId,
-      partnerId,
-      role as "super_admin" | "admin" | "collaborator"
-    );
+    const result = await assignUserToPartner(assignUserId, assignPartnerId, assignRole as any);
     setLoading(false);
-
     if (result.success) {
-      showToast("Usuario asignado exitosamente", "success");
+      showToast("Usuario asignado", "success");
+      setAssignOpen(false);
+      setAssignUserId("");
       router.refresh();
     } else {
-      showToast(result.error ?? "Error al asignar", "error");
+      showToast(result.error ?? "Error", "error");
     }
+  };
+
+  const timeAgo = (d: string | null) => {
+    if (!d) return null;
+    const diff = Date.now() - new Date(d).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d`;
+    return `${Math.floor(days / 30)}mes`;
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div ref={containerRef} className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Colaboradores</h1>
-          <p className="text-muted-foreground">
-            Gestiona los colaboradores y perfiles virtuales.
-          </p>
+          <p className="text-muted-foreground">Gestiona colaboradores y perfiles virtuales.</p>
         </div>
-
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nuevo Colaborador
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Nuevo
           </Button>
-
           <DialogContent>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleCreate}>
               <DialogHeader>
-                <DialogTitle>
-                  {editingUser ? "Editar Colaborador" : "Nuevo Colaborador"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingUser
-                    ? "Modifica los datos del colaborador."
-                    : "Los perfiles virtuales son solo para contabilidad. Los usuarios del sistema pueden iniciar sesion."}
-                </DialogDescription>
+                <DialogTitle>Nuevo Colaborador</DialogTitle>
+                <DialogDescription>Perfiles virtuales son para contabilidad. Usuarios del sistema pueden iniciar sesion.</DialogDescription>
               </DialogHeader>
-
               <div className="space-y-4 py-4">
-                {!editingUser && (
+                <div className="space-y-2">
+                  <Label>Tipo</Label>
+                  <Select value={userType} onValueChange={setUserType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="virtual_profile">Perfil Virtual</SelectItem>
+                      <SelectItem value="system_user">Usuario del Sistema</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nombre</Label>
+                  <Input id="name" name="name" placeholder="Nombre completo" required />
+                </div>
+                {userType === "system_user" && (
                   <div className="space-y-2">
-                    <Label>Tipo de usuario</Label>
-                    <Select value={userType} onValueChange={setUserType}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" name="email" type="email" placeholder="email@ejemplo.com" required />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Partner</Label>
+                    <Select value={createPartnerId} onValueChange={setCreatePartnerId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="virtual_profile">
-                          Perfil Virtual (solo contabilidad)
-                        </SelectItem>
-                        <SelectItem value="system_user">
-                          Usuario del Sistema (con login)
-                        </SelectItem>
+                        {partners.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nombre</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    placeholder="Nombre completo"
-                    defaultValue={editingUser?.name ?? ""}
-                    required
-                  />
-                </div>
-
-                {(userType === "system_user" || editingUser?.email) && (
                   <div className="space-y-2">
-                    <Label htmlFor="email">
-                      Email{" "}
-                      {userType === "system_user" && (
-                        <span className="text-destructive">*</span>
-                      )}
-                    </Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="email@ejemplo.com"
-                      defaultValue={editingUser?.email ?? ""}
-                      required={userType === "system_user"}
-                    />
+                    <Label>Rol</Label>
+                    <Select value={createRole} onValueChange={setCreateRole}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="collaborator">Colaborador</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="super_admin">Super Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-
-                {!editingUser && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Partner</Label>
-                      <select
-                        name="partnerId"
-                        required
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="">Seleccionar Partner</option>
-                        {partners.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Rol</Label>
-                      <select
-                        name="role"
-                        required
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="collaborator">Colaborador</option>
-                        <option value="admin">Admin</option>
-                        <option value="super_admin">Super Admin</option>
-                      </select>
-                    </div>
-
-                    {/* Skip invite option for system_user */}
-                    {userType === "system_user" && (
-                      <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
-                        <label className="flex items-start gap-3 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={skipInvite}
-                            onChange={(e) => setSkipInvite(e.target.checked)}
-                            className="mt-1 h-4 w-4 rounded border-gray-300"
-                          />
-                          <div>
-                            <p className="text-sm font-medium">
-                              Crear sin enviar invitacion
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Crea la cuenta sin enviar email. Podras enviar la
-                              invitacion despues con el boton de correo en la
-                              tabla.{" "}
-                              <span className="text-amber-600">
-                                Util si el SMTP aun no esta configurado.
-                              </span>
-                            </p>
-                          </div>
-                        </label>
-                      </div>
-                    )}
-                  </>
-                )}
+                </div>
               </div>
-
               <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading
-                    ? "Guardando..."
-                    : editingUser
-                    ? "Guardar Cambios"
-                    : "Crear Colaborador"}
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={loading}>{loading ? "Creando..." : "Crear"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Delete confirmation dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Eliminar Usuario
-            </DialogTitle>
-            <DialogDescription>
-              Esta accion no se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-
-          {userToDelete && (
-            <div className="space-y-4 py-2">
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                <p className="text-sm text-red-800">
-                  Estas a punto de eliminar permanentemente a{" "}
-                  <span className="font-semibold">{userToDelete.name}</span>
-                  {userToDelete.email && (
-                    <>
-                      {" "}
-                      (<span className="font-mono text-xs">{userToDelete.email}</span>)
-                    </>
-                  )}
-                  .
-                </p>
-                <p className="text-sm text-red-700 mt-2">
-                  Se eliminara su cuenta de autenticacion, sus asignaciones a
-                  partners, y sus distribuciones en productos. Los reportes ya
-                  generados no se veran afectados.
-                </p>
-              </div>
+      {/* Unassigned alert */}
+      {unassignedUsers.length > 0 && (
+        <Card data-animate-card className="border-0 shadow-sm bg-amber-50 dark:bg-amber-950/20 cursor-pointer" onClick={() => setAssignOpen(true)}>
+          <CardContent className="flex items-center gap-3 p-4">
+            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{unassignedUsers.length} usuario(s) sin asignar</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">Click para asignarlos a un partner</p>
             </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-              disabled={deleteLoading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              disabled={deleteLoading}
-            >
-              {deleteLoading ? "Eliminando..." : "Eliminar Permanentemente"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reject confirmation dialog */}
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Rechazar Solicitud
-            </DialogTitle>
-            <DialogDescription>
-              Esta accion eliminara la cuenta del usuario.
-            </DialogDescription>
-          </DialogHeader>
-
-          {userToReject && (
-            <div className="space-y-4 py-2">
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                <p className="text-sm text-red-800">
-                  Vas a rechazar la solicitud de{" "}
-                  <span className="font-semibold">{userToReject.name}</span>
-                  {userToReject.email && (
-                    <>
-                      {" "}
-                      (<span className="font-mono text-xs">{userToReject.email}</span>)
-                    </>
-                  )}
-                  .
-                </p>
-                <p className="text-sm text-red-700 mt-2">
-                  Se eliminara su cuenta de autenticacion y su registro. El usuario
-                  podra volver a registrarse si lo desea.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRejectDialogOpen(false)}
-              disabled={rejectLoading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleRejectConfirm}
-              disabled={rejectLoading}
-            >
-              {rejectLoading ? "Rechazando..." : "Rechazar Solicitud"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add partner dialog */}
-      <Dialog open={addPartnerDialogOpen} onOpenChange={setAddPartnerDialogOpen}>
-        <DialogContent>
-          <form onSubmit={handleAddPartner}>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5" />
-                Agregar Partner
-              </DialogTitle>
-              <DialogDescription>
-                {addPartnerUser && (
-                  <>
-                    Asignar un partner adicional a{" "}
-                    <span className="font-semibold">{addPartnerUser.name}</span>.
-                  </>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Partner</Label>
-                <select
-                  name="newPartnerId"
-                  required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">Seleccionar Partner</option>
-                  {partners
-                    .filter(
-                      (p) =>
-                        !addPartnerUser?.user_partner_roles.some(
-                          (upr) => upr.partner_id === p.id
-                        )
-                    )
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Rol</Label>
-                <select
-                  name="newPartnerRole"
-                  required
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="collaborator">Colaborador</option>
-                  <option value="admin">Admin</option>
-                  <option value="super_admin">Super Admin</option>
-                </select>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setAddPartnerDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={addPartnerLoading}>
-                {addPartnerLoading ? "Asignando..." : "Asignar Partner"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {initialUsers.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex h-[300px] items-center justify-center rounded-md border border-dashed text-muted-foreground">
-              <div className="text-center">
-                <Users className="mx-auto h-10 w-10 mb-3" />
-                <p className="font-medium">No hay colaboradores registrados</p>
-                <p className="text-sm mt-1">
-                  Agrega colaboradores con acceso al sistema o perfiles
-                  virtuales.
-                </p>
-                <Button className="mt-4" onClick={openCreate}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Crear Colaborador
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Colaboradores Registrados</CardTitle>
-            <CardDescription>
-              {initialUsers.length} colaborador
-              {initialUsers.length !== 1 ? "es" : ""} en el sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="pb-3 font-medium text-muted-foreground">
-                      Nombre
-                    </th>
-                    <th className="pb-3 font-medium text-muted-foreground">
-                      Email
-                    </th>
-                    <th className="pb-3 font-medium text-muted-foreground">
-                      Tipo
-                    </th>
-                    <th className="pb-3 font-medium text-muted-foreground">
-                      Partner / Rol
-                    </th>
-                    <th className="pb-3 font-medium text-muted-foreground">
-                      Estado
-                    </th>
-                    <th className="pb-3 font-medium text-muted-foreground text-right">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {initialUsers.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="border-b last:border-0 hover:bg-muted/50 transition-colors"
-                    >
-                      <td className="py-3 font-medium">
-                        <div className="flex items-center gap-2">
-                          {user.user_type === "system_user" ? (
-                            <User className="h-4 w-4 text-primary" />
-                          ) : (
-                            <Ghost className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          {user.name}
-                        </div>
-                      </td>
-                      <td className="py-3 text-muted-foreground">
-                        {user.email || "—"}
-                      </td>
-                      <td className="py-3">
-                        <Badge variant="outline">
-                          {user.user_type === "system_user"
-                            ? "Sistema"
-                            : "Virtual"}
-                        </Badge>
-                      </td>
-                      <td className="py-3">
-                        <div className="flex flex-col gap-1">
-                          {user.user_partner_roles.length > 0 ? (
-                            user.user_partner_roles.map((upr) => (
-                              <div
-                                key={upr.id}
-                                className="flex items-center gap-2"
-                              >
-                                <span className="text-xs text-muted-foreground">
-                                  {(upr.partners as any)?.name ?? "—"}
-                                </span>
-                                <select
-                                  value={upr.role}
-                                  onChange={(e) =>
-                                    handleRoleChange(
-                                      user.id,
-                                      upr.partner_id,
-                                      e.target.value
-                                    )
-                                  }
-                                  className="h-7 rounded border bg-background px-2 text-xs"
-                                >
-                                  <option value="collaborator">
-                                    Colaborador
-                                  </option>
-                                  <option value="admin">Admin</option>
-                                  <option value="super_admin">
-                                    Super Admin
-                                  </option>
-                                </select>
-                              </div>
-                            ))
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Sin partner asignado
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <Badge
-                          variant={user.is_active ? "success" : "secondary"}
-                          className={
-                            !user.is_active && user.user_type === "system_user"
-                              ? "border-amber-300 bg-amber-50 text-amber-700"
-                              : ""
-                          }
-                        >
-                          {user.is_active
-                            ? "Activo"
-                            : user.user_type === "system_user"
-                            ? "Pendiente"
-                            : "Inactivo"}
-                        </Badge>
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* Resend invitation — only for system_user with auth */}
-                          {isSuperAdmin &&
-                            user.user_type === "system_user" &&
-                            user.auth_user_id && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleResendInvitation(user)}
-                                disabled={resendingFor === user.id}
-                                title="Reenviar invitacion"
-                              >
-                                <Mail
-                                  className={`h-4 w-4 text-blue-600 ${
-                                    resendingFor === user.id
-                                      ? "animate-pulse"
-                                      : ""
-                                  }`}
-                                />
-                              </Button>
-                            )}
-
-                          {/* Add additional partner */}
-                          {isSuperAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setAddPartnerUser(user);
-                                setAddPartnerDialogOpen(true);
-                              }}
-                              title="Agregar partner"
-                            >
-                              <Building2 className="h-4 w-4 text-amber-600" />
-                            </Button>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEdit(user)}
-                            title="Editar"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggleActive(user)}
-                            title={
-                              user.is_active ? "Desactivar" : "Activar"
-                            }
-                          >
-                            {user.is_active ? (
-                              <ToggleRight className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <ToggleLeft className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-
-                          {/* Delete — only for super_admin */}
-                          {isSuperAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openDeleteDialog(user)}
-                              title="Eliminar usuario"
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ChevronRight className="h-4 w-4 text-amber-600" />
           </CardContent>
         </Card>
       )}
 
-      {/* Unassigned users — self-registered, waiting for partner assignment */}
-      {unassignedUsers.length > 0 && (
-        <Card className="border-amber-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-amber-600" />
-              Usuarios sin Asignar
-            </CardTitle>
-            <CardDescription>
-              Estos usuarios se registraron por su cuenta y estan esperando ser
-              asignados a un Partner.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {unassignedUsers.map((user) => (
-                <form
-                  key={user.id}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAssign(user.id, e.currentTarget);
-                  }}
-                  className="flex flex-wrap items-center gap-3 rounded-md border border-amber-100 bg-amber-50/50 p-3"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <User className="h-4 w-4 text-amber-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{user.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {user.email ?? "Sin email"} · Registrado{" "}
-                        {new Date(user.created_at).toLocaleDateString("es-MX", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
+      {/* Assign dialog */}
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Asignar Usuarios</DialogTitle>
+            <DialogDescription>Selecciona un usuario y asignalo a un partner.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Usuario</Label>
+              <Select value={assignUserId || undefined} onValueChange={setAssignUserId}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                <SelectContent>
+                  {unassignedUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name} {u.email ? `(${u.email})` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Partner</Label>
+                <Select value={assignPartnerId} onValueChange={setAssignPartnerId}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {partners.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Rol</Label>
+                <Select value={assignRole} onValueChange={setAssignRole}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="collaborator">Colaborador</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAssign} disabled={loading || !assignUserId}>{loading ? "Asignando..." : "Asignar"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-                  <select
-                    name="assignPartnerId"
-                    required
-                    className="h-8 rounded border bg-background px-2 text-xs"
-                  >
-                    <option value="">Partner...</option>
-                    {partners.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+      {/* Stats */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Total", value: initialUsers.length },
+          { label: "Activos", value: activeCount, color: "text-green-600" },
+          { label: "Sistema", value: systemCount },
+          { label: "Virtuales", value: initialUsers.length - systemCount },
+        ].map((s) => (
+          <Card key={s.label} data-animate-card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+              <p className={`text-2xl font-bold ${s.color ?? ""}`}>{s.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-                  <select
-                    name="assignRole"
-                    className="h-8 rounded border bg-background px-2 text-xs"
-                  >
-                    <option value="collaborator">Colaborador</option>
-                    <option value="admin">Admin</option>
-                    <option value="super_admin">Super Admin</option>
-                  </select>
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="pl-9 w-48 h-9 bg-card border-0 shadow-sm" />
+        </div>
+        {partners.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Partner:</span>
+            <Select value={filterPartner || "all"} onValueChange={(v) => setFilterPartner(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {partners.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Rol:</span>
+          <Select value={filterRole || "all"} onValueChange={(v) => setFilterRole(v === "all" ? "" : v)}>
+            <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="collaborator">Colaborador</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="super_admin">Super Admin</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Tipo:</span>
+          <Select value={filterType || "all"} onValueChange={(v) => setFilterType(v === "all" ? "" : v)}>
+            <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="system_user">Sistema</SelectItem>
+              <SelectItem value="virtual_profile">Virtual</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Estado:</span>
+          <Select value={filterStatus || "all"} onValueChange={(v) => setFilterStatus(v === "all" ? "" : v)}>
+            <SelectTrigger className="h-8 w-[110px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="active">Activo</SelectItem>
+              <SelectItem value="inactive">Inactivo</SelectItem>
+              <SelectItem value="pending">Pendiente</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} de {initialUsers.length}</span>
+      </div>
 
-                  <Button type="submit" size="sm" disabled={loading}>
-                    Asignar
-                  </Button>
-
-                  {isSuperAdmin && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => {
-                        setUserToReject(user);
-                        setRejectDialogOpen(true);
-                      }}
-                      disabled={rejectLoading}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Rechazar
-                    </Button>
-                  )}
-                </form>
-              ))}
+      {/* Collaborator cards */}
+      {filtered.length === 0 ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="flex h-[200px] items-center justify-center text-muted-foreground">
+            <div className="text-center">
+              <Users className="mx-auto h-8 w-8 mb-2 opacity-40" />
+              <p className="text-sm">{search ? "Sin resultados" : "Sin colaboradores"}</p>
             </div>
           </CardContent>
         </Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((user) => {
+            const statusColor = user.is_active ? "bg-green-500" : user.user_type === "system_user" ? "bg-amber-500" : "bg-gray-300";
+            const lastAct = timeAgo(user.lastActivity);
+
+            return (
+              <Card
+                key={user.id}
+                data-animate-card
+                className="border-0 shadow-sm transition-card hover-lift cursor-pointer group"
+                onClick={() => router.push(`/collaborators/${user.id}`)}
+              >
+                <CardContent className="flex items-center gap-4 p-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold overflow-hidden">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt={user.name} className="h-full w-full object-cover" />
+                    ) : user.user_type === "system_user" ? (
+                      <User className="h-5 w-5" />
+                    ) : (
+                      <Ghost className="h-5 w-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">{displayName(user.name)}</p>
+                      <span className={`h-2 w-2 rounded-full ${statusColor}`} />
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {user.email ?? "Sin email"}
+                      {lastAct && (
+                        <span className="ml-2 inline-flex items-center gap-0.5">
+                          <Clock className="h-3 w-3" /> {lastAct}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                    {user.user_partner_roles.map((upr) => (
+                      <Badge key={upr.id} variant="outline" className="text-[10px]">
+                        {upr.partners?.name} · {roleLabels[upr.role] ?? upr.role}
+                      </Badge>
+                    ))}
+                  </div>
+                  <Badge
+                    variant={user.user_type === "system_user" ? "secondary" : "outline"}
+                    className="text-[10px] shrink-0 hidden md:inline-flex"
+                  >
+                    {user.user_type === "system_user" ? "Sistema" : "Virtual"}
+                  </Badge>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );

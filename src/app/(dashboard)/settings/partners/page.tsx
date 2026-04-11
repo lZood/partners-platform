@@ -1,13 +1,9 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getPartnersWithMetrics } from "@/actions/partners";
 import { PartnersClient } from "./partners-client";
 
 export default async function PartnersPage() {
-  const supabase = createServerSupabaseClient();
+  const result = await getPartnersWithMetrics();
 
-  const { data: partners } = await supabase
-    .from("partners")
-    .select("*")
-    .order("name", { ascending: true });
-
-  return <PartnersClient initialPartners={partners ?? []} />;
+  return <PartnersClient initialPartners={result.data ?? []} />;
 }

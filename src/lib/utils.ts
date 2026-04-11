@@ -52,6 +52,28 @@ export function convertUsdToMxn(usd: number, rate: number): number {
 }
 
 /**
+ * Get display name: first 2 names from a full name.
+ * "Jose Carlos Garcia Lopez" → "Jose Carlos"
+ * "Carlos" → "Carlos"
+ */
+export function displayName(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return parts.slice(0, 2).join(" ");
+}
+
+/**
+ * Get initials from a name (max 2 chars).
+ */
+export function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((n) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+}
+
+/**
  * Format a month date (YYYY-MM-DD) to display string
  */
 export function formatMonth(dateStr: string): string {

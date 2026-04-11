@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -11,6 +11,41 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // Check if this is an OAuth user (Google) and ensure they have a users record
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const serviceClient = createServiceRoleClient();
+
+        // Check if user record already exists
+        const { data: existingUser } = await serviceClient
+          .from("users")
+          .select("id")
+          .eq("auth_user_id", user.id)
+          .single();
+
+        if (!existingUser) {
+          // First time OAuth login — create user record
+          const name =
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email?.split("@")[0] ||
+            "Usuario";
+          const email = user.email || "";
+          const avatarUrl = user.user_metadata?.avatar_url || null;
+
+          await serviceClient.from("users").insert({
+            auth_user_id: user.id,
+            name,
+            email,
+            user_type: "system_user",
+            avatar_url: avatarUrl,
+          });
+        }
+      }
+
       // If the redirect target is /auth/set-password, send them there
       if (next.includes("/auth/set-password")) {
         return NextResponse.redirect(`${origin}/auth/set-password`);

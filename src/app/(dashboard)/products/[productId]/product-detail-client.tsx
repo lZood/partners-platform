@@ -26,6 +26,8 @@ import {
   Pencil,
   Lock,
   ShieldAlert,
+  Camera,
+  Package,
 } from "lucide-react";
 import { AreaChart, BarChart } from "@tremor/react";
 import { Button } from "@/components/ui/button";
@@ -39,8 +41,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { saveDistributions } from "@/actions/distributions";
-import { updateProduct, toggleProductActive } from "@/actions/products";
+import { updateProduct, toggleProductActive, updateProductImage, updateProductLifecycle } from "@/actions/products";
+import { uploadFile, getFileExtension } from "@/lib/supabase/storage";
 import { useToast } from "@/components/shared/toast-provider";
 import { cn, formatPercentage, formatUSD, formatMXN } from "@/lib/utils";
 import type {
@@ -69,6 +79,8 @@ interface Props {
     id: string;
     name: string;
     description: string | null;
+    image_url: string | null;
+    lifecycle_status: string;
     is_active: boolean;
     created_at: string;
     partner_id: string;
@@ -154,14 +166,42 @@ export function ProductDetailClient({
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
+
+            {/* Product image */}
+            <div className="relative group shrink-0">
+              <div className="h-14 w-14 rounded-xl overflow-hidden bg-muted flex items-center justify-center">
+                {product.image_url ? (
+                  <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+                ) : (
+                  <Package className="h-6 w-6 text-muted-foreground" />
+                )}
+              </div>
+              <label className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                <Camera className="h-4 w-4 text-white" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const ext = getFileExtension(file);
+                    const result = await uploadFile("products", `${product.id}.${ext}`, file);
+                    if ("url" in result) {
+                      await updateProductImage(product.id, result.url);
+                      showToast("Imagen actualizada", "success");
+                      router.refresh();
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-3xl font-bold tracking-tight">{product.name}</h1>
                 <Badge
-                  className={cn(
-                    "border",
-                    getTypeBadgeClass(product.product_types?.name ?? "")
-                  )}
+                  className={cn("border", getTypeBadgeClass(product.product_types?.name ?? ""))}
                   variant="outline"
                 >
                   {product.product_types?.name ?? "Sin tipo"}
@@ -169,6 +209,12 @@ export function ProductDetailClient({
                 <Badge variant={product.is_active ? "success" : "secondary"}>
                   {product.is_active ? "Activo" : "Inactivo"}
                 </Badge>
+                {product.lifecycle_status === "draft" && (
+                  <Badge variant="secondary">Borrador</Badge>
+                )}
+                {product.lifecycle_status === "discontinued" && (
+                  <Badge variant="destructive">Descontinuado</Badge>
+                )}
               </div>
               <p className="text-muted-foreground mt-1">
                 {product.partners?.name}
@@ -176,6 +222,28 @@ export function ProductDetailClient({
               </p>
             </div>
           </div>
+
+          {/* Lifecycle selector */}
+          <Select
+            value={product.lifecycle_status ?? "active"}
+            onValueChange={async (val) => {
+              const result = await updateProductLifecycle(
+                product.id,
+                val as "draft" | "active" | "discontinued"
+              );
+              if (result.success) {
+                showToast("Estado actualizado", "success");
+                router.refresh();
+              }
+            }}
+          >
+            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">Borrador</SelectItem>
+              <SelectItem value="active">Activo</SelectItem>
+              <SelectItem value="discontinued">Descontinuado</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -1010,6 +1078,7 @@ function SettingsTab({
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [selectedProductTypeId, setSelectedProductTypeId] = useState(product.product_type_id);
 
   const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1062,18 +1131,17 @@ function SettingsTab({
 
             <div className="space-y-2">
               <Label>Tipo de producto</Label>
-              <select
-                name="productTypeId"
-                required
-                defaultValue={product.product_type_id}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                {productTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <input type="hidden" name="productTypeId" value={selectedProductTypeId} />
+              <Select value={selectedProductTypeId || undefined} onValueChange={setSelectedProductTypeId}>
+                <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                <SelectContent>
+                  {productTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

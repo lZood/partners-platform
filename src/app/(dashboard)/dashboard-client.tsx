@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AreaChart, BarChart, DonutChart } from "@tremor/react";
+import gsap from "gsap";
+import { AreaChart } from "@tremor/react";
 import {
   DollarSign,
   Package,
@@ -13,8 +14,15 @@ import {
   Minus,
   Lock,
   Unlock,
-  Eye,
-  ArrowRight,
+  ChevronRight,
+  Wallet,
+  Building2,
+  Bell,
+  Calendar,
+  AlertCircle,
+  CreditCard,
+  UserPlus,
+  Clock,
 } from "lucide-react";
 import {
   Card,
@@ -25,370 +33,552 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatUSD, formatMXN, formatMonth } from "@/lib/utils";
-import type { DashboardData } from "@/actions/dashboard";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  formatUSD,
+  formatMXN,
+  formatMonth,
+  displayName,
+  getInitials,
+} from "@/lib/utils";
+import type {
+  DashboardData,
+  AdminDashboardExtra,
+  CalendarEvent,
+  Notification,
+} from "@/actions/dashboard";
 
 interface Props {
   data: DashboardData;
+  extra: AdminDashboardExtra | null;
   partners: { id: string; name: string }[];
   currentPartnerId?: string;
   userRole: string;
+  userName: string;
 }
 
+function useCountUp(end: number, duration: number = 0.8) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const hasAnimated = useRef(false);
+  useEffect(() => {
+    if (!ref.current || hasAnimated.current) return;
+    hasAnimated.current = true;
+    const obj = { value: 0 };
+    gsap.to(obj, {
+      value: end,
+      duration,
+      ease: "power2.out",
+      onUpdate: () => {
+        if (ref.current) {
+          ref.current.textContent = obj.value.toLocaleString("en-US", {
+            maximumFractionDigits: 0,
+          });
+        }
+      },
+    });
+  }, [end, duration]);
+  return ref;
+}
+
+// ── Mini Calendar ───────────────────────────────────────────────
+function MiniCalendar({ events }: { events: CalendarEvent[] }) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = now.getDate();
+
+  const eventDates = new Map<number, CalendarEvent[]>();
+  for (const e of events) {
+    const d = parseInt(e.date.split("-")[2]);
+    if (!eventDates.has(d)) eventDates.set(d, []);
+    eventDates.get(d)!.push(e);
+  }
+
+  const monthName = now.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  const dayNames = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+
+  return (
+    <div>
+      <p className="text-sm font-medium capitalize mb-3">{monthName}</p>
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {dayNames.map((d) => (
+          <span key={d} className="text-[10px] text-muted-foreground font-medium">
+            {d}
+          </span>
+        ))}
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <span key={`empty-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const dayEvents = eventDates.get(day);
+          const isToday = day === today;
+          return (
+            <div
+              key={day}
+              className={`relative flex items-center justify-center h-7 w-7 mx-auto rounded-full text-xs ${
+                isToday
+                  ? "bg-primary text-primary-foreground font-bold"
+                  : "text-foreground"
+              }`}
+            >
+              {day}
+              {dayEvents && (
+                <span className="absolute -bottom-0.5 flex gap-0.5">
+                  {dayEvents.some((e) => e.type === "report") && (
+                    <span className="h-1 w-1 rounded-full bg-blue-500" />
+                  )}
+                  {dayEvents.some((e) => e.type === "payment") && (
+                    <span className="h-1 w-1 rounded-full bg-green-500" />
+                  )}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-3 mt-3 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Reportes
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Pagos
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Notification Feed ───────────────────────────────────────────
+function NotificationFeed({ notifications }: { notifications: Notification[] }) {
+  const icons: Record<string, typeof Bell> = {
+    report_generated: FileText,
+    payment_registered: CreditCard,
+    payment_received: Wallet,
+    user_unassigned: UserPlus,
+    concept_added: DollarSign,
+  };
+
+  const colors: Record<string, string> = {
+    report_generated: "text-blue-500",
+    payment_registered: "text-green-500",
+    payment_received: "text-emerald-500",
+    user_unassigned: "text-amber-500",
+    concept_added: "text-violet-500",
+  };
+
+  const timeAgo = (ts: string) => {
+    const diff = Date.now() - new Date(ts).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    return `${Math.floor(hrs / 24)}d`;
+  };
+
+  if (notifications.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground text-center py-4">
+        Sin actividad reciente
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {notifications.map((n) => {
+        const Icon = icons[n.type] ?? Bell;
+        const color = colors[n.type] ?? "text-muted-foreground";
+        return (
+          <div key={n.id} className="flex items-start gap-2.5">
+            <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${color}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs leading-relaxed">{n.message}</p>
+            </div>
+            <span className="text-[10px] text-muted-foreground shrink-0">
+              {timeAgo(n.timestamp)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main Dashboard Component ────────────────────────────────────
 export function DashboardClient({
   data,
+  extra,
   partners,
   currentPartnerId,
   userRole,
+  userName,
 }: Props) {
   const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
   const { stats, monthlyTrends, productTypeProfitability, topProducts, recentReports } = data;
 
   const [selectedPartner, setSelectedPartner] = useState(currentPartnerId ?? "");
 
   const handlePartnerChange = (value: string) => {
     setSelectedPartner(value);
-    const url = value ? `/?partner=${value}` : "/";
-    router.push(url);
+    router.push(value ? `/?partner=${value}` : "/");
   };
 
-  // MoM change calculation
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const cards = containerRef.current.querySelectorAll("[data-animate-card]");
+    gsap.fromTo(
+      cards,
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.4, stagger: 0.08, ease: "power2.out" }
+    );
+  }, []);
+
   const momChange =
     stats.previousMonthUsd > 0
       ? ((stats.currentMonthUsd - stats.previousMonthUsd) / stats.previousMonthUsd) * 100
-      : stats.currentMonthUsd > 0
-        ? 100
-        : 0;
+      : stats.currentMonthUsd > 0 ? 100 : 0;
 
-  const MomIcon =
-    momChange > 0 ? TrendingUp : momChange < 0 ? TrendingDown : Minus;
-  const momColor =
-    momChange > 0
-      ? "text-green-600"
-      : momChange < 0
-        ? "text-red-600"
-        : "text-muted-foreground";
+  const MomIcon = momChange > 0 ? TrendingUp : momChange < 0 ? TrendingDown : Minus;
+  const momColor = momChange > 0 ? "text-green-600" : momChange < 0 ? "text-red-600" : "text-muted-foreground";
 
-  // Value formatter for Tremor charts
   const usdFormatter = (v: number) => formatUSD(v);
-  const mxnFormatter = (v: number) => formatMXN(v);
-
   const isAdmin = userRole === "super_admin" || userRole === "admin";
 
+  const usdRef = useCountUp(stats.currentMonthUsd);
+  const pendingRef = useCountUp(extra?.totalPendingPayments ?? 0);
+  const paidRef = useCountUp(extra?.totalPaidThisMonth ?? 0);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Resumen de ganancias y actividad reciente.
-          </p>
+    <div ref={containerRef} className="space-y-6">
+      {/* Partner selector */}
+      {isAdmin && partners.length > 1 && (
+        <div data-animate-card className="flex justify-end">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Partner:</span>
+            <Select value={selectedPartner || "all"} onValueChange={(v) => handlePartnerChange(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los Partners</SelectItem>
+                {partners.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        {isAdmin && partners.length > 1 && (
-          <select
-            value={selectedPartner}
-            onChange={(e) => handlePartnerChange(e.target.value)}
-            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="">Todos los Partners</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+      )}
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Ganancias del Mes (USD)
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatUSD(stats.currentMonthUsd)}</div>
-            {stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0 ? (
-              <p className={`text-xs flex items-center gap-1 ${momColor}`}>
-                <MomIcon className="h-3 w-3" />
-                {momChange > 0 ? "+" : ""}
-                {momChange.toFixed(1)}% vs mes anterior
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Sin datos del mes actual
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Ganancias del Mes (MXN)
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMXN(stats.currentMonthMxn)}</div>
-            <p className="text-xs text-muted-foreground">
-              Tipo de cambio del deposito bancario
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Productos Activos
-            </CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeProducts}</div>
-            <p className="text-xs text-muted-foreground">
-              Skinpacks, Minigames, Add-ons
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Colaboradores</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeCollaborators}</div>
-            <p className="text-xs text-muted-foreground">
-              Con distribuciones activas
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Revenue Trend */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Tendencia de Ingresos</CardTitle>
-            <CardDescription>
-              Ingresos mensuales brutos (ultimos 12 meses)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {monthlyTrends.length > 0 ? (
-              <AreaChart
-                className="h-72"
-                data={monthlyTrends}
-                index="label"
-                categories={["totalUsd", "totalMxn"]}
-                colors={["blue", "emerald"]}
-                valueFormatter={usdFormatter}
-                yAxisWidth={80}
-                showLegend={true}
-                curveType="monotone"
-                customTooltip={({ payload, active }) => {
-                  if (!active || !payload?.length) return null;
-                  const item = payload[0]?.payload;
-                  return (
-                    <div className="rounded-md border bg-white p-3 shadow-md text-sm">
-                      <p className="font-medium mb-1">{item?.label}</p>
-                      <p className="text-blue-600">
-                        USD: {formatUSD(item?.totalUsd ?? 0)}
-                      </p>
-                      <p className="text-emerald-600">
-                        MXN: {formatMXN(item?.totalMxn ?? 0)}
-                      </p>
-                    </div>
-                  );
-                }}
-              />
-            ) : (
-              <div className="flex h-72 items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                <div className="text-center">
-                  <TrendingUp className="mx-auto h-8 w-8 mb-2" />
-                  <p>Sin datos de tendencia aun.</p>
-                  <p className="text-xs">Genera reportes para ver la grafica.</p>
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        {/* Left column */}
+        <div className="space-y-6">
+          {/* Stats row */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">Ingresos Mes</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <DollarSign className="h-4 w-4" />
+                  </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                <p className="text-2xl font-bold">$<span ref={usdRef}>0</span></p>
+                {(stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0) && (
+                  <p className={`text-xs flex items-center gap-1 mt-1 ${momColor}`}>
+                    <MomIcon className="h-3 w-3" />
+                    {momChange > 0 ? "+" : ""}{momChange.toFixed(1)}% vs anterior
+                  </p>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Profitability by Type */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Rentabilidad por Tipo</CardTitle>
-            <CardDescription>
-              Ingresos brutos totales por tipo de producto
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {productTypeProfitability.length > 0 ? (
-              <div className="space-y-4">
-                <BarChart
-                  className="h-52"
-                  data={productTypeProfitability}
-                  index="productType"
-                  categories={["totalUsd"]}
-                  colors={["violet"]}
-                  valueFormatter={usdFormatter}
-                  yAxisWidth={80}
-                  showLegend={false}
-                />
-                <div className="grid grid-cols-3 gap-2">
-                  {productTypeProfitability.map((pt) => (
-                    <div
-                      key={pt.productType}
-                      className="rounded-md border p-2 text-center"
-                    >
-                      <p className="text-xs text-muted-foreground">
-                        {pt.productType}
-                      </p>
-                      <p className="text-sm font-bold">
-                        {formatUSD(pt.totalUsd)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {pt.productCount} productos
+            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">Pendiente Pago</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                    <Wallet className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-red-600">$<span ref={pendingRef}>0</span></p>
+                <p className="text-xs text-muted-foreground mt-1">Por pagar a colaboradores</p>
+              </CardContent>
+            </Card>
+
+            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">Pagado este Mes</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-green-600">
+                    <CreditCard className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-green-600">$<span ref={paidRef}>0</span></p>
+                <p className="text-xs text-muted-foreground mt-1">Total pagado</p>
+              </CardContent>
+            </Card>
+
+            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">Reportes</span>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold">{stats.totalReports}</p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.activeProducts} productos · {stats.activeCollaborators} colaboradores</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Partners Overview (super_admin) */}
+          {extra && extra.partnersOverview.length > 1 && (
+            <Card data-animate-card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Partners</CardTitle>
+                  <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/settings/partners")}>
+                    Ver Todos <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {extra.partnersOverview.map((p) => (
+                    <div key={p.id} className="flex items-center gap-3 rounded-lg bg-muted/30 p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => router.push(`/settings/partners/${p.id}`)}>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 overflow-hidden">
+                        {p.logoUrl ? (
+                          <img src={p.logoUrl} alt={p.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <Building2 className="h-5 w-5 text-primary" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{p.name}</p>
+                        <p className="text-xs text-muted-foreground">{p.memberCount} miembros</p>
+                      </div>
+                      <p className="text-sm font-mono font-medium tabular-nums shrink-0">
+                        {formatUSD(p.currentMonthUsd)}
                       </p>
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <div className="flex h-72 items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                <div className="text-center">
-                  <Package className="mx-auto h-8 w-8 mb-2" />
-                  <p>Sin datos de rentabilidad aun.</p>
-                  <p className="text-xs">
-                    Genera reportes para ver la comparativa.
-                  </p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </CardContent>
+            </Card>
+          )}
 
-      {/* Top Products + Recent Reports */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Top Products */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Productos</CardTitle>
-            <CardDescription>
-              Los 10 productos con mayor ingreso bruto acumulado
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topProducts.length > 0 ? (
-              <div className="space-y-3">
-                {topProducts.map((p, i) => (
-                  <div
-                    key={p.name}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {p.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {p.productType}
-                        </p>
+          {/* Pending Payments */}
+          {extra && extra.pendingPayments.length > 0 && (
+            <Card data-animate-card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Pagos Pendientes</CardTitle>
+                  <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/payments")}>
+                    Ver Todos <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {extra.pendingPayments.map((p) => (
+                    <div key={p.userId} className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/payments/${p.userId}`)}>
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold overflow-hidden">
+                        {p.avatarUrl ? (
+                          <img src={p.avatarUrl} alt={p.userName} className="h-full w-full object-cover" />
+                        ) : (
+                          getInitials(p.userName)
+                        )}
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{displayName(p.userName)}</p>
+                        <p className="text-xs text-muted-foreground">{p.unpaidMonths} mes(es) sin pagar</p>
+                      </div>
+                      <p className="text-sm font-mono font-bold tabular-nums text-red-600 shrink-0">
+                        {formatUSD(p.totalPendingUsd)}
+                      </p>
                     </div>
-                    <span className="text-sm font-mono tabular-nums shrink-0">
-                      {formatUSD(p.totalUsd)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-[200px] items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                <div className="text-center">
-                  <Package className="mx-auto h-8 w-8 mb-2" />
-                  <p>Sin datos de productos aun.</p>
+                  ))}
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Recent Reports */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Reportes Recientes</CardTitle>
-                <CardDescription>
-                  Ultimos {recentReports.length || 5} reportes generados
-                </CardDescription>
-              </div>
-              {recentReports.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => router.push("/reports")}>
-                  Ver todos
-                  <ArrowRight className="ml-1 h-4 w-4" />
-                </Button>
+          {/* Revenue Trend */}
+          <Card data-animate-card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Tendencia de Ingresos</CardTitle>
+              <CardDescription>Ultimos 12 meses (brutos)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {monthlyTrends.length > 0 ? (
+                <AreaChart
+                  className="h-56"
+                  data={monthlyTrends}
+                  index="label"
+                  categories={["totalUsd", "totalMxn"]}
+                  colors={["blue", "emerald"]}
+                  valueFormatter={usdFormatter}
+                  yAxisWidth={72}
+                  showLegend
+                  curveType="monotone"
+                />
+              ) : (
+                <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+                  <div className="text-center">
+                    <TrendingUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
+                    <p className="text-sm">Sin datos de tendencia</p>
+                  </div>
+                </div>
               )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {recentReports.length > 0 ? (
-              <div className="space-y-3">
-                {recentReports.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between gap-3 rounded-md border p-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => router.push(`/reports/${r.id}`)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {r.isLocked ? (
-                        <Lock className="h-4 w-4 text-green-600 shrink-0" />
-                      ) : (
-                        <Unlock className="h-4 w-4 text-amber-500 shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium capitalize truncate">
-                          {formatMonth(r.reportMonth)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {r.partnerName}
-                        </p>
+            </CardContent>
+          </Card>
+
+          {/* Recent Reports */}
+          <Card data-animate-card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Reportes Recientes</CardTitle>
+                {recentReports.length > 0 && (
+                  <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/reports")}>
+                    Ver Todos <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentReports.length > 0 ? (
+                <div className="space-y-2">
+                  {recentReports.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg p-3 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/reports/${r.id}`)}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                          {r.isLocked ? <Lock className="h-4 w-4 text-green-600" /> : <Unlock className="h-4 w-4 text-amber-500" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium capitalize truncate">{formatMonth(r.reportMonth)}</p>
+                          <p className="text-xs text-muted-foreground">{r.partnerName}</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-mono tabular-nums font-medium">{formatUSD(r.totalUsd)}</p>
+                        <p className="text-xs text-muted-foreground font-mono tabular-nums">{formatMXN(r.totalMxn)}</p>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-mono tabular-nums">
-                        {formatUSD(r.totalUsd)}
-                      </p>
-                      <p className="text-xs text-muted-foreground font-mono tabular-nums">
-                        {formatMXN(r.totalMxn)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-[200px] items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                <div className="text-center">
-                  <FileText className="mx-auto h-8 w-8 mb-2" />
-                  <p>No hay reportes aun.</p>
-                  <p className="text-xs">
-                    Sube un CSV para generar el primer reporte.
-                  </p>
+                  ))}
                 </div>
+              ) : (
+                <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+                  <p className="text-sm">No hay reportes aun</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-6">
+          {/* Unassigned users alert */}
+          {extra && extra.unassignedUsersCount > 0 && (
+            <Card data-animate-card className="border-0 shadow-sm bg-amber-50 dark:bg-amber-950/20">
+              <CardContent className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => router.push("/collaborators")}>
+                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800">{extra.unassignedUsersCount} usuario(s) sin asignar</p>
+                  <p className="text-xs text-amber-600">Esperando asignacion a un partner</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Calendar */}
+          {extra && (
+            <Card data-animate-card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calendar className="h-4 w-4" /> Calendario
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MiniCalendar events={extra.calendar} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notifications */}
+          {extra && (
+            <Card data-animate-card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Bell className="h-4 w-4" /> Actividad Reciente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <NotificationFeed notifications={extra.notifications} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top Products */}
+          <Card data-animate-card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Top Productos</CardTitle>
+                <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/products")}>
+                  Ver Todos <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              {topProducts.length > 0 ? (
+                <div className="space-y-2">
+                  {topProducts.slice(0, 5).map((p, i) => (
+                    <div key={p.name} className="flex items-center gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
+                      <p className="text-sm font-medium truncate flex-1">{p.name}</p>
+                      <span className="text-xs font-mono tabular-nums text-muted-foreground shrink-0">{formatUSD(p.totalUsd)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">Sin datos</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* By Product Type */}
+          {productTypeProfitability.length > 0 && (
+            <Card data-animate-card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Por Tipo de Producto</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {productTypeProfitability.map((pt) => (
+                    <div key={pt.productType} className="flex items-center justify-between rounded-lg p-3 bg-muted/30">
+                      <div>
+                        <p className="text-sm font-medium">{pt.productType}</p>
+                        <p className="text-xs text-muted-foreground">{pt.productCount} producto{pt.productCount !== 1 ? "s" : ""}</p>
+                      </div>
+                      <p className="text-sm font-mono font-bold tabular-nums">{formatUSD(pt.totalUsd)}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );

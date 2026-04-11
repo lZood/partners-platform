@@ -544,6 +544,83 @@ export async function createUserRecord(
 }
 
 /**
+ * Update the current user's avatar.
+ */
+export async function updateUserAvatar(
+  avatarUrl: string
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "No autenticado" };
+
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (!appUser) return { success: false, error: "Usuario no encontrado" };
+
+  const { error } = await supabase
+    .from("users")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", appUser.id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+  return { success: true };
+}
+
+/**
+ * Update the current user's profile (name).
+ */
+export async function updateUserProfile(
+  formData: FormData
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: "No autenticado" };
+  }
+
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) {
+    return { success: false, error: "El nombre es requerido" };
+  }
+
+  // Find the app user by auth_user_id
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (!appUser) {
+    return { success: false, error: "Usuario no encontrado" };
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update({ name })
+    .eq("id", appUser.id);
+
+  if (error) {
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+/**
  * Self-registration: creates auth user + users table record using admin API.
  * This bypasses Supabase's email sending entirely (which can't reach our SMTP).
  * The user is auto-confirmed and can log in immediately after admin assignment.
@@ -703,4 +780,110 @@ export async function assignUserToPartner(
 
   revalidatePath("/collaborators");
   return { success: true };
+}
+
+/**
+ * Get full detail of a collaborator for the detail page.
+ */
+export async function getCollaboratorDetail(
+  userId: string
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: user, error } = await supabase
+    .from("users")
+    .select("id, name, email, user_type, is_active, avatar_url, created_at, updated_at, auth_user_id, totp_enabled")
+    .eq("id", userId)
+    .single();
+
+  if (error || !user) return { success: false, error: "Usuario no encontrado" };
+
+  const { data: roles } = await supabase
+    .from("user_partner_roles")
+    .select("id, role, partner_id, partners (id, name)")
+    .eq("user_id", userId);
+
+  const { data: distributions } = await supabase
+    .from("product_distributions")
+    .select("id, percentage_share, products!inner (id, name, is_active, image_url, product_types (name))")
+    .eq("user_id", userId);
+
+  const { data: lineItems } = await supabase
+    .from("report_line_items")
+    .select("final_usd, final_mxn, monthly_reports!inner (report_month)")
+    .eq("user_id", userId);
+
+  let totalEarningsUsd = 0;
+  const monthlyEarnings = new Map<string, { usd: number; mxn: number }>();
+  for (const item of (lineItems ?? []) as any[]) {
+    const usd = Number(item.final_usd ?? 0);
+    const mxn = Number(item.final_mxn ?? 0);
+    totalEarningsUsd += usd;
+    const month = item.monthly_reports?.report_month?.substring(0, 7);
+    if (month) {
+      const e = monthlyEarnings.get(month) ?? { usd: 0, mxn: 0 };
+      e.usd += usd;
+      e.mxn += mxn;
+      monthlyEarnings.set(month, e);
+    }
+  }
+
+  const { data: payments } = await supabase
+    .from("payments")
+    .select("id, total_usd, total_mxn, paid_at, payment_method")
+    .eq("user_id", userId)
+    .order("paid_at", { ascending: false })
+    .limit(5);
+
+  const totalPaymentsUsd = (payments ?? []).reduce(
+    (s, p: any) => s + Number(p.total_usd ?? 0), 0
+  );
+
+  const { data: lastLogin } = await supabase
+    .from("login_logs")
+    .select("created_at, ip_address")
+    .eq("user_id", userId)
+    .eq("status", "success")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  return {
+    success: true,
+    data: {
+      user,
+      roles: roles ?? [],
+      products: (distributions ?? []).map((d: any) => ({
+        id: d.products.id,
+        name: d.products.name,
+        isActive: d.products.is_active,
+        imageUrl: d.products.image_url,
+        productType: d.products.product_types?.name ?? "Sin tipo",
+        percentageShare: Number(d.percentage_share),
+      })),
+      earnings: {
+        totalUsd: Math.round(totalEarningsUsd * 100) / 100,
+        totalPaymentsUsd: Math.round(totalPaymentsUsd * 100) / 100,
+        pendingUsd: Math.round(Math.max(0, totalEarningsUsd - totalPaymentsUsd) * 100) / 100,
+        monthly: Array.from(monthlyEarnings.entries())
+          .map(([month, d]) => {
+            const [y, m] = month.split("-");
+            return { month, label: `${MONTH_LABELS[parseInt(m) - 1]} ${y}`, totalUsd: Math.round(d.usd * 100) / 100 };
+          })
+          .sort((a, b) => a.month.localeCompare(b.month))
+          .slice(-12),
+      },
+      payments: (payments ?? []).map((p: any) => ({
+        id: p.id,
+        totalUsd: Number(p.total_usd),
+        paidAt: p.paid_at,
+        paymentMethod: p.payment_method,
+      })),
+      lastLogin: (lastLogin as any)?.[0] ? {
+        createdAt: (lastLogin as any)[0].created_at,
+        ipAddress: (lastLogin as any)[0].ip_address,
+      } : null,
+    },
+  };
 }

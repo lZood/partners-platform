@@ -214,6 +214,51 @@ export async function toggleProductActive(
   return { success: true };
 }
 
+export async function updateProductImage(
+  productId: string,
+  imageUrl: string
+): Promise<ActionResult> {
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ image_url: imageUrl })
+    .eq("id", productId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/products");
+  revalidatePath(`/products/${productId}`);
+  return { success: true };
+}
+
+export async function updateProductLifecycle(
+  productId: string,
+  status: "draft" | "active" | "discontinued"
+): Promise<ActionResult> {
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ lifecycle_status: status })
+    .eq("id", productId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/products");
+  revalidatePath(`/products/${productId}`);
+  return { success: true };
+}
+
+export async function updateProductCategory(
+  productId: string,
+  categoryId: string | null
+): Promise<ActionResult> {
+  const supabase = createServerSupabaseClient();
+  const { error } = await supabase
+    .from("products")
+    .update({ category_id: categoryId })
+    .eq("id", productId);
+  if (error) return { success: false, error: error.message };
+  revalidatePath("/products");
+  revalidatePath(`/products/${productId}`);
+  return { success: true };
+}
+
 // ── CSV product matching ────────────────────────────────────────────
 
 export interface ProductMatchResult {

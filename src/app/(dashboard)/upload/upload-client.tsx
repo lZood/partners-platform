@@ -32,6 +32,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/shared/toast-provider";
 import {
   generateReport,
@@ -324,25 +331,26 @@ export function UploadClient({ partners, productTypes }: Props) {
           <div className="grid gap-4 md:grid-cols-3">
             <div className="space-y-2">
               <Label>Partner</Label>
-              <select
-                value={partnerId}
-                onChange={(e) => {
-                  setPartnerId(e.target.value);
+              <Select
+                value={partnerId || undefined}
+                onValueChange={(val) => {
+                  setPartnerId(val);
                   setMatchResults([]);
                   setExistingReport(null);
                   setConflictChecked(false);
                   setReplaceConfirmed(false);
                   setResult(null);
                 }}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="">Seleccionar Partner</option>
-                {partners.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger><SelectValue placeholder="Seleccionar Partner" /></SelectTrigger>
+                <SelectContent>
+                  {partners.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Mes / Ano</Label>

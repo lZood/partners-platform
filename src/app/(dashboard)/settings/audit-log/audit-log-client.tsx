@@ -22,7 +22,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getAuditLogs, type AuditLogEntry, type AuditLogResult } from "@/actions/audit";
+import { displayName, getInitials } from "@/lib/utils";
 
 interface Props {
   initialData: AuditLogResult;
@@ -186,33 +194,29 @@ export function AuditLogClient({ initialData }: Props) {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Tabla</label>
-              <select
-                value={filterTable}
-                onChange={(e) => setFilterTable(e.target.value)}
-                className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                <option value="">Todas</option>
-                {Object.entries(TABLE_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Tabla:</span>
+              <Select value={filterTable || "all"} onValueChange={(v) => setFilterTable(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {Object.entries(TABLE_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Accion</label>
-              <select
-                value={filterAction}
-                onChange={(e) => setFilterAction(e.target.value)}
-                className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-              >
-                <option value="">Todas</option>
-                <option value="created">Creado</option>
-                <option value="updated">Actualizado</option>
-                <option value="deleted">Eliminado</option>
-              </select>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Accion:</span>
+              <Select value={filterAction || "all"} onValueChange={(v) => setFilterAction(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="created">Creado</SelectItem>
+                  <SelectItem value="updated">Actualizado</SelectItem>
+                  <SelectItem value="deleted">Eliminado</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button size="sm" onClick={applyFilters} disabled={loading}>
               {loading ? (
@@ -268,6 +272,18 @@ export function AuditLogClient({ initialData }: Props) {
                       }
                     >
                       <div className="flex items-center gap-3 min-w-0">
+                        {/* Avatar */}
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-bold overflow-hidden">
+                          {entry.createdByAvatar ? (
+                            <img
+                              src={entry.createdByAvatar}
+                              alt={entry.createdByName ?? ""}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            getInitials(entry.createdByName ?? "S")
+                          )}
+                        </div>
                         <Badge
                           variant="secondary"
                           className={`${config.color} gap-1 text-xs shrink-0`}
@@ -280,7 +296,7 @@ export function AuditLogClient({ initialData }: Props) {
                             {TABLE_LABELS[entry.tableName] ?? entry.tableName}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {entry.createdByName ?? entry.createdByEmail ?? "Sistema"}{" "}
+                            {entry.createdByName ? displayName(entry.createdByName) : (entry.createdByEmail ?? "Sistema")}{" "}
                             · {formatDate(entry.createdAt)}
                           </p>
                         </div>

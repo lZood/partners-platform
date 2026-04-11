@@ -12,6 +12,7 @@ export interface AuditLogEntry {
   createdAt: string;
   createdByName: string | null;
   createdByEmail: string | null;
+  createdByAvatar: string | null;
 }
 
 export interface AuditLogFilters {
@@ -42,7 +43,7 @@ export async function getAuditLogs(
     // Build query
     let query = supabase
       .from("audit_logs")
-      .select("id, table_name, record_id, action_type, old_values, new_values, created_at, created_by, users (name, email)", { count: "exact" })
+      .select("id, table_name, record_id, action_type, old_values, new_values, created_at, created_by, users (name, email, avatar_url)", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -69,6 +70,7 @@ export async function getAuditLogs(
       createdAt: row.created_at,
       createdByName: row.users?.name ?? null,
       createdByEmail: row.users?.email ?? null,
+      createdByAvatar: row.users?.avatar_url ?? null,
     }));
 
     const totalCount = count ?? 0;

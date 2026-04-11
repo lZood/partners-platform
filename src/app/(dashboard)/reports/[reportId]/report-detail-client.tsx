@@ -23,6 +23,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -54,6 +61,8 @@ export function ReportDetailClient({
   const { showToast } = useToast();
   const [adjDialogOpen, setAdjDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adjUserId, setAdjUserId] = useState("");
+  const [adjType, setAdjType] = useState("bonus");
 
   const exchangeRate = Number(report.exchange_rates?.usd_to_mxn ?? 0);
   const isCollaboratorView = !!currentUserId;
@@ -224,7 +233,13 @@ export function ReportDetailClient({
               <a href={`/api/reports/${report.id}/pdf`} target="_blank">
                 <Button variant="outline" size="sm">
                   <FileDown className="mr-2 h-4 w-4" />
-                  Descargar PDF
+                  PDF
+                </Button>
+              </a>
+              <a href={`/api/reports/${report.id}/excel`} target="_blank">
+                <Button variant="outline" size="sm">
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Excel
                 </Button>
               </a>
               <Button
@@ -414,31 +429,30 @@ export function ReportDetailClient({
                     <div className="space-y-4 py-4">
                       <div className="space-y-2">
                         <Label>Colaborador</Label>
-                        <select
-                          name="userId"
-                          required
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                          <option value="">Seleccionar</option>
-                          {availableUsers.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.name}
-                            </option>
-                          ))}
-                        </select>
+                        <input type="hidden" name="userId" value={adjUserId} />
+                        <Select value={adjUserId || undefined} onValueChange={setAdjUserId}>
+                          <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                          <SelectContent>
+                            {availableUsers.map((u) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="space-y-2">
                         <Label>Tipo</Label>
-                        <select
-                          name="adjustmentType"
-                          required
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                          <option value="bonus">Bono (+)</option>
-                          <option value="deduction">Deduccion (-)</option>
-                          <option value="correction">Correccion</option>
-                        </select>
+                        <input type="hidden" name="adjustmentType" value={adjType} />
+                        <Select value={adjType} onValueChange={setAdjType}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="bonus">Bono (+)</SelectItem>
+                            <SelectItem value="deduction">Deduccion (-)</SelectItem>
+                            <SelectItem value="correction">Correccion</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="space-y-2">

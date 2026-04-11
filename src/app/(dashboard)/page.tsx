@@ -1,7 +1,14 @@
+import { Suspense } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getDashboardData } from "@/actions/dashboard";
+import {
+  getDashboardData,
+  getAdminDashboardExtra,
+  getCollaboratorDashboard,
+} from "@/actions/dashboard";
 import { DashboardClient } from "./dashboard-client";
+import { DashboardCollaborator } from "./dashboard-collaborator";
+import { DashboardSkeleton } from "./dashboard-skeleton";
 
 interface PageProps {
   searchParams: Promise<{
@@ -9,11 +16,10 @@ interface PageProps {
   }>;
 }
 
-export default async function DashboardPage({ searchParams }: PageProps) {
+async function DashboardContent({ searchParams }: PageProps) {
   const supabase = createServerSupabaseClient();
   const params = await searchParams;
 
-  // Auth check
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -22,11 +28,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     redirect("/login");
   }
 
-  // Get user role
   const { data: appUser } = await supabase
     .from("users")
     .select(`
       id,
+      name,
       user_partner_roles (role, partner_id)
     `)
     .eq("auth_user_id", user.id)
@@ -34,8 +40,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const roles = (appUser?.user_partner_roles as any[]) ?? [];
   const userRole = roles[0]?.role ?? "collaborator";
+  const userName = (appUser as any)?.name ?? "Usuario";
 
-  // Get partners for filter dropdown
+  // ── Collaborator dashboard ──
+  if (userRole === "collaborator") {
+    const result = await getCollaboratorDashboard(appUser?.id ?? "");
+    if (!result.success) {
+      return <p className="text-red-500">Error: {result.error}</p>;
+    }
+    return (
+      <DashboardCollaborator data={result.data} userName={userName} />
+    );
+  }
+
+  // ── Admin / Super Admin dashboard ──
   let partners: { id: string; name: string }[] = [];
 
   if (userRole === "super_admin") {
@@ -56,28 +74,34 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     partners = (data as any[]) ?? [];
   }
 
-  // For collaborators, scope to their partner
-  const partnerId =
-    params.partner ??
-    (userRole === "collaborator" ? roles[0]?.partner_id : undefined);
+  const partnerId = params.partner;
 
-  // Fetch dashboard data
-  const result = await getDashboardData(partnerId);
+  // Fetch base + extra data in parallel
+  const [baseResult, extraResult] = await Promise.all([
+    getDashboardData(partnerId),
+    getAdminDashboardExtra(partnerId),
+  ]);
 
-  if (!result.success) {
-    return (
-      <div className="p-6">
-        <p className="text-red-500">Error cargando dashboard: {result.error}</p>
-      </div>
-    );
+  if (!baseResult.success) {
+    return <p className="text-red-500">Error: {baseResult.error}</p>;
   }
 
   return (
     <DashboardClient
-      data={result.data}
+      data={baseResult.data}
+      extra={extraResult.success ? extraResult.data : null}
       partners={partners}
       currentPartnerId={partnerId}
       userRole={userRole}
+      userName={userName}
     />
+  );
+}
+
+export default function DashboardPage(props: PageProps) {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent {...props} />
+    </Suspense>
   );
 }
