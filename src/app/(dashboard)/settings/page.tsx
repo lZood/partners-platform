@@ -51,6 +51,12 @@ export default async function SettingsPage() {
   } = await supabase.auth.getSession();
   const currentSessionToken = session?.access_token?.substring(0, 32) ?? "";
 
+  // Check Google linked status
+  const identities = user.identities ?? [];
+  const googleIdentity = identities.find(
+    (i: any) => i.provider === "google"
+  );
+
   return (
     <div className="space-y-8">
       <SettingsClient
@@ -62,6 +68,9 @@ export default async function SettingsPage() {
         }}
         userRole={userRole}
         partner={partner}
+        googleLinked={!!googleIdentity}
+        googleEmail={googleIdentity?.identity_data?.email ?? null}
+        googleAvatar={googleIdentity?.identity_data?.avatar_url ?? null}
       />
 
       <SecuritySection

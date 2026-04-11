@@ -79,8 +79,8 @@ export async function GET(request: Request) {
     });
 
     if (!error) {
-      // Invited users should set their password
-      if (type === "invite" || type === "magiclink") {
+      // Invited users and password recovery should set their password
+      if (type === "invite" || type === "magiclink" || type === "recovery") {
         return NextResponse.redirect(`${origin}/auth/set-password`);
       }
       return NextResponse.redirect(`${origin}${next}`);
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
     const errorParams = new URLSearchParams({
       error: "access_denied",
       error_code: "otp_expired",
-      error_description: "El enlace de invitacion ha expirado o es invalido. Solicita uno nuevo a tu administrador.",
+      error_description: "El enlace ha expirado o es invalido. Solicita uno nuevo.",
     });
     return NextResponse.redirect(
       `${origin}/auth/set-password#${errorParams.toString()}`

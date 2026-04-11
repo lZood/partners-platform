@@ -1,12 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { sendPasswordResetEmail } from "@/lib/email";
 import * as OTPAuth from "otpauth";
 import QRCode from "qrcode";
 import crypto from "crypto";
 
 type Result = { success: boolean; error?: string; data?: any };
+
+function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+  const h = headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
+  const protocol = h.get("x-forwarded-proto") || "http";
+  const origin = `${protocol}://${host}`;
+  return origin.replace("0.0.0.0", "localhost");
+}
 
 function generateRecoveryCodes(count: number = 8): string[] {
   const codes: string[] = [];
@@ -355,5 +368,60 @@ export async function terminateAllOtherSessions(
     .neq("session_token", currentSessionToken);
   if (error) return { success: false, error: error.message };
   revalidatePath("/settings");
+  return { success: true };
+}
+
+// ── Password Recovery ─────────────────────────────────────────
+
+/**
+ * Request a password reset email.
+ * Always returns success to prevent email enumeration.
+ */
+export async function requestPasswordReset(email: string): Promise<Result> {
+  const serviceClient = createServiceRoleClient();
+
+  // Look up user - but always return success regardless
+  const { data: appUser } = await serviceClient
+    .from("users")
+    .select("name, email")
+    .eq("email", email.toLowerCase().trim())
+    .single();
+
+  if (!appUser) {
+    // Don't reveal that the email doesn't exist
+    return { success: true };
+  }
+
+  const userName = (appUser as any).name ?? "Usuario";
+
+  // Generate recovery link via Supabase admin API
+  const { data: linkData, error: linkError } =
+    await serviceClient.auth.admin.generateLink({
+      type: "recovery",
+      email: (appUser as any).email,
+      options: {
+        redirectTo: `${getBaseUrl()}/auth/set-password`,
+      },
+    });
+
+  if (linkError) {
+    console.error("Error generating recovery link:", linkError.message);
+    // Still return success to prevent enumeration
+    return { success: true };
+  }
+
+  // Send the email via our SMTP
+  const resetLink = linkData.properties.action_link;
+
+  const emailResult = await sendPasswordResetEmail({
+    to: (appUser as any).email,
+    userName,
+    resetLink,
+  });
+
+  if (!emailResult.success) {
+    console.error("Error sending reset email:", emailResult.error);
+  }
+
   return { success: true };
 }

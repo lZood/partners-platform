@@ -35,6 +35,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthPage =
     pathname.startsWith("/login") ||
     pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/auth");
   const isSetPasswordPage = pathname.startsWith("/auth/set-password");
   const isPendingPage = pathname.startsWith("/auth/pending-approval");

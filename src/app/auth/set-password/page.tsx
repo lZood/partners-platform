@@ -155,7 +155,13 @@ export default function SetPasswordPage() {
     setPageState("success");
 
     setTimeout(() => {
-      router.push("/");
+      if (isPasswordChange) {
+        // Password recovery — sign out and redirect to login
+        await supabase.auth.signOut();
+        router.push("/login");
+      } else {
+        router.push("/");
+      }
     }, 2000);
   };
 
@@ -269,9 +275,8 @@ export default function SetPasswordPage() {
               </h2>
               <p className="text-muted-foreground">
                 {isPasswordChange
-                  ? "Tu contraseña ha sido cambiada exitosamente."
-                  : "Tu cuenta esta lista."}{" "}
-                Redirigiendo al dashboard...
+                  ? "Tu contraseña ha sido cambiada exitosamente. Redirigiendo al login..."
+                  : "Tu cuenta esta lista. Redirigiendo al dashboard..."}
               </p>
             </div>
           </CardContent>
