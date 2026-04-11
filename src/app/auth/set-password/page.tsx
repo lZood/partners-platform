@@ -154,7 +154,7 @@ export default function SetPasswordPage() {
 
     setPageState("success");
 
-    setTimeout(() => {
+    setTimeout(async () => {
       if (isPasswordChange) {
         // Password recovery — sign out and redirect to login
         await supabase.auth.signOut();
