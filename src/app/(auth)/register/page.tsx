@@ -54,10 +54,14 @@ export default function RegisterPage() {
     setGoogleLoading(true);
     setError("");
 
+    const redirectBase =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      window.location.origin.replace("0.0.0.0", "localhost");
+
     const { error: googleError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${redirectBase}/auth/callback`,
       },
     });
 
