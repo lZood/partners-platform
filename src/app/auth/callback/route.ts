@@ -1,8 +1,21 @@
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 
+function getOrigin(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+  const h = headers();
+  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
+  const protocol = h.get("x-forwarded-proto") || "http";
+  const origin = `${protocol}://${host}`;
+  return origin.replace("0.0.0.0", "localhost");
+}
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getOrigin();
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
 
