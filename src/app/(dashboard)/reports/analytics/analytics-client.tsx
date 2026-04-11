@@ -79,7 +79,7 @@ export function AnalyticsClient({ data, year, partnerId, partners }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
           <p className="text-muted-foreground">
             Graficas y comparativas de ingresos, productos y pagos.
           </p>

@@ -148,14 +148,7 @@ export function PartnersClient({ initialPartners }: Props) {
 
   return (
     <div ref={containerRef} className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Partners</h1>
-          <p className="text-muted-foreground">
-            Gestiona las entidades y socios del sistema.
-          </p>
-        </div>
-
+      <div className="flex items-center justify-end">
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />

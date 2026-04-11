@@ -230,7 +230,7 @@ export function CollaboratorsClient({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Colaboradores</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Colaboradores</h1>
           <p className="text-muted-foreground">Gestiona colaboradores y perfiles virtuales.</p>
         </div>
         <div className="flex items-center gap-2">

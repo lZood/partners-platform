@@ -178,7 +178,7 @@ export function MyEarningsClient({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Mis Ganancias</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Mis Ganancias</h1>
         <p className="text-muted-foreground">
           Resumen de tus ganancias mensuales por productos y partners
         </p>

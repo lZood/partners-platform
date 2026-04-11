@@ -58,8 +58,9 @@ import {
   updateUserRole,
   updateUserAvatar,
   resendInvitation,
+  assignUserToPartner,
 } from "@/actions/users";
-import { assignUserToPartner, removeMemberFromPartner } from "@/actions/partners";
+import { removeMemberFromPartner } from "@/actions/partners";
 import { uploadFile, getFileExtension } from "@/lib/supabase/storage";
 import { useToast } from "@/components/shared/toast-provider";
 import {

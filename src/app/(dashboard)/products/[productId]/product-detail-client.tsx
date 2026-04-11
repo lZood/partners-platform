@@ -199,7 +199,7 @@ export function ProductDetailClient({
 
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-3xl font-bold tracking-tight">{product.name}</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{product.name}</h1>
                 <Badge
                   className={cn("border", getTypeBadgeClass(product.product_types?.name ?? ""))}
                   variant="outline"

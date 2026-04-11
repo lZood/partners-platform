@@ -208,7 +208,7 @@ export function ReportDetailClient({
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight capitalize">
+          <h1 className="text-2xl font-bold tracking-tight capitalize">
             {formatMonth(report.report_month)}
           </h1>
           <p className="text-muted-foreground">

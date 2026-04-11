@@ -409,310 +409,203 @@ export function DashboardClient({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        {/* Left column */}
-        <div className="space-y-6">
-          {/* Stats row */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {currentDateFrom ? "Ingresos Periodo" : "Ingresos Mes"}
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                    <DollarSign className="h-4 w-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">$<span ref={usdRef}>0</span></p>
-                {(stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0) && (
-                  <p className={`text-xs flex items-center gap-1 mt-1 ${momColor}`}>
-                    <MomIcon className="h-3 w-3" />
-                    {momChange > 0 ? "+" : ""}{momChange.toFixed(1)}% vs periodo anterior
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">Pendiente Pago</span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                    <Wallet className="h-4 w-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-red-600">$<span ref={pendingRef}>0</span></p>
-                <p className="text-xs text-muted-foreground mt-1">Por pagar a colaboradores</p>
-              </CardContent>
-            </Card>
-
-            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {currentDateFrom ? "Pagado Periodo" : "Pagado este Mes"}
-                  </span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 text-green-600">
-                    <CreditCard className="h-4 w-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-green-600">$<span ref={paidRef}>0</span></p>
-                <p className="text-xs text-muted-foreground mt-1">Total pagado</p>
-              </CardContent>
-            </Card>
-
-            <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-muted-foreground">Reportes</span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold">{stats.totalReports}</p>
-                <p className="text-xs text-muted-foreground mt-1">{stats.activeProducts} productos · {stats.activeCollaborators} colaboradores</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Partners Overview (super_admin) */}
-          {extra && extra.partnersOverview.length > 1 && (
-            <Card data-animate-card className="border-0 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Partners</CardTitle>
-                  <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/settings/partners")}>
-                    Ver Todos <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {extra.partnersOverview.map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 rounded-lg bg-muted/30 p-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => router.push(`/settings/partners/${p.id}`)}>
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 overflow-hidden">
-                        {p.logoUrl ? (
-                          <img src={p.logoUrl} alt={p.name} className="h-full w-full object-cover" />
-                        ) : (
-                          <Building2 className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{p.memberCount} miembros</p>
-                      </div>
-                      <p className="text-sm font-mono font-medium tabular-nums shrink-0">
-                        {formatUSD(p.currentMonthUsd)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Pending Payments */}
-          {extra && extra.pendingPayments.length > 0 && (
-            <Card data-animate-card className="border-0 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Pagos Pendientes</CardTitle>
-                  <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/payments")}>
-                    Ver Todos <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {extra.pendingPayments.map((p) => (
-                    <div key={p.userId} className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/payments/${p.userId}`)}>
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold overflow-hidden">
-                        {p.avatarUrl ? (
-                          <img src={p.avatarUrl} alt={p.userName} className="h-full w-full object-cover" />
-                        ) : (
-                          getInitials(p.userName)
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{displayName(p.userName)}</p>
-                        <p className="text-xs text-muted-foreground">{p.unpaidMonths} mes(es) sin pagar</p>
-                      </div>
-                      <p className="text-sm font-mono font-bold tabular-nums text-red-600 shrink-0">
-                        {formatUSD(p.totalPendingUsd)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Revenue Trend */}
-          <Card data-animate-card className="border-0 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Tendencia de Ingresos</CardTitle>
-              <CardDescription>Ultimos 12 meses (brutos)</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {monthlyTrends.length > 0 ? (
-                <AreaChart
-                  className="h-56"
-                  data={monthlyTrends}
-                  index="label"
-                  categories={["totalUsd", "totalMxn"]}
-                  colors={["blue", "emerald"]}
-                  valueFormatter={usdFormatter}
-                  yAxisWidth={72}
-                  showLegend
-                  curveType="monotone"
-                />
-              ) : (
-                <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-                  <div className="text-center">
-                    <TrendingUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
-                    <p className="text-sm">Sin datos de tendencia</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Recent Reports */}
-          <Card data-animate-card className="border-0 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Reportes Recientes</CardTitle>
-                {recentReports.length > 0 && (
-                  <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/reports")}>
-                    Ver Todos <ChevronRight className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {recentReports.length > 0 ? (
-                <div className="space-y-2">
-                  {recentReports.map((r) => (
-                    <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg p-3 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/reports/${r.id}`)}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                          {r.isLocked ? <Lock className="h-4 w-4 text-green-600" /> : <Unlock className="h-4 w-4 text-amber-500" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium capitalize truncate">{formatMonth(r.reportMonth)}</p>
-                          <p className="text-xs text-muted-foreground">{r.partnerName}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-sm font-mono tabular-nums font-medium">{formatUSD(r.totalUsd)}</p>
-                        <p className="text-xs text-muted-foreground font-mono tabular-nums">{formatMXN(r.totalMxn)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-                  <p className="text-sm">No hay reportes aun</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {/* Unassigned users alert */}
+      {extra && extra.unassignedUsersCount > 0 && (
+        <div data-animate-card className="flex items-center gap-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 cursor-pointer" onClick={() => router.push("/collaborators")}>
+          <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{extra.unassignedUsersCount} usuario(s) esperando asignacion</p>
+          <ChevronRight className="h-4 w-4 text-amber-600 ml-auto shrink-0" />
         </div>
+      )}
 
-        {/* Right column */}
-        <div className="space-y-6">
-          {/* Unassigned users alert */}
-          {extra && extra.unassignedUsersCount > 0 && (
-            <Card data-animate-card className="border-0 shadow-sm bg-amber-50 dark:bg-amber-950/20">
-              <CardContent className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => router.push("/collaborators")}>
-                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-amber-800">{extra.unassignedUsersCount} usuario(s) sin asignar</p>
-                  <p className="text-xs text-amber-600">Esperando asignacion a un partner</p>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Stats row */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-muted-foreground">
+                {currentDateFrom ? "Ingresos Periodo" : "Ingresos Mes"}
+              </span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600">
+                <DollarSign className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold">$<span ref={usdRef}>0</span></p>
+            {(stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0) && (
+              <p className={`text-xs flex items-center gap-1 mt-1 ${momColor}`}>
+                <MomIcon className="h-3 w-3" />
+                {momChange > 0 ? "+" : ""}{momChange.toFixed(1)}% vs periodo anterior
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-muted-foreground">Pendiente Pago</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600">
+                <Wallet className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-red-600">$<span ref={pendingRef}>0</span></p>
+            <p className="text-xs text-muted-foreground mt-1">Por pagar a colaboradores</p>
+          </CardContent>
+        </Card>
+
+        <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-muted-foreground">
+                {currentDateFrom ? "Pagado Periodo" : "Pagado este Mes"}
+              </span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 dark:bg-green-950/30 text-green-600">
+                <CreditCard className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-green-600">$<span ref={paidRef}>0</span></p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats.activeProducts} productos · {stats.activeCollaborators} colaboradores
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Revenue Trend */}
+      <Card data-animate-card className="border-0 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Tendencia de Ingresos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {monthlyTrends.length > 0 ? (
+            <AreaChart
+              className="h-56"
+              data={monthlyTrends}
+              index="label"
+              categories={["totalUsd", "totalMxn"]}
+              colors={["blue", "emerald"]}
+              valueFormatter={usdFormatter}
+              yAxisWidth={72}
+              showLegend
+              curveType="monotone"
+            />
+          ) : (
+            <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+              <div className="text-center">
+                <TrendingUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
+                <p className="text-sm">Sin datos de tendencia</p>
+              </div>
+            </div>
           )}
+        </CardContent>
+      </Card>
 
-          {/* Calendar */}
-          {extra && (
-            <Card data-animate-card className="border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar className="h-4 w-4" /> Calendario
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <MiniCalendar events={extra.calendar} />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Notifications */}
-          {extra && (
-            <Card data-animate-card className="border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Bell className="h-4 w-4" /> Actividad Reciente
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <NotificationFeed notifications={extra.notifications} />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Top Products */}
+      {/* Two-column: Pending Payments + Top Products */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Pending Payments */}
+        {extra && extra.pendingPayments.length > 0 && (
           <Card data-animate-card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Top Productos</CardTitle>
-                <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/products")}>
+                <CardTitle className="text-base">Pagos Pendientes</CardTitle>
+                <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/payments")}>
                   Ver Todos <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              {topProducts.length > 0 ? (
-                <div className="space-y-2">
-                  {topProducts.slice(0, 5).map((p, i) => (
-                    <div key={p.name} className="flex items-center gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
-                      <p className="text-sm font-medium truncate flex-1">{p.name}</p>
-                      <span className="text-xs font-mono tabular-nums text-muted-foreground shrink-0">{formatUSD(p.totalUsd)}</span>
+              <div className="space-y-2">
+                {extra.pendingPayments.slice(0, 5).map((p) => (
+                  <div key={p.userId} className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/payments/${p.userId}`)}>
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold overflow-hidden">
+                      {p.avatarUrl ? (
+                        <img src={p.avatarUrl} alt={p.userName} className="h-full w-full object-cover" />
+                      ) : (
+                        getInitials(p.userName)
+                      )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Sin datos</p>
-              )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{displayName(p.userName)}</p>
+                      <p className="text-xs text-muted-foreground">{p.unpaidMonths} mes(es)</p>
+                    </div>
+                    <p className="text-sm font-mono font-bold tabular-nums text-red-600 shrink-0">
+                      {formatUSD(p.totalPendingUsd)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
+        )}
 
-          {/* By Product Type */}
-          {productTypeProfitability.length > 0 && (
-            <Card data-animate-card className="border-0 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Por Tipo de Producto</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {productTypeProfitability.map((pt) => (
-                    <div key={pt.productType} className="flex items-center justify-between rounded-lg p-3 bg-muted/30">
-                      <div>
-                        <p className="text-sm font-medium">{pt.productType}</p>
-                        <p className="text-xs text-muted-foreground">{pt.productCount} producto{pt.productCount !== 1 ? "s" : ""}</p>
-                      </div>
-                      <p className="text-sm font-mono font-bold tabular-nums">{formatUSD(pt.totalUsd)}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        {/* Top Products */}
+        <Card data-animate-card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Top Productos</CardTitle>
+              <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/products")}>
+                Ver Todos <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {topProducts.length > 0 ? (
+              <div className="space-y-2">
+                {topProducts.slice(0, 5).map((p, i) => (
+                  <div key={p.name} className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
+                    <p className="text-sm font-medium truncate flex-1">{p.name}</p>
+                    <span className="text-xs font-mono tabular-nums text-muted-foreground shrink-0">{formatUSD(p.totalUsd)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Sin datos</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Recent Reports */}
+      <Card data-animate-card className="border-0 shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Reportes Recientes</CardTitle>
+            {recentReports.length > 0 && (
+              <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/reports")}>
+                Ver Todos <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {recentReports.length > 0 ? (
+            <div className="space-y-2">
+              {recentReports.slice(0, 3).map((r) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg p-3 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/reports/${r.id}`)}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      {r.isLocked ? <Lock className="h-4 w-4 text-green-600" /> : <Unlock className="h-4 w-4 text-amber-500" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium capitalize truncate">{formatMonth(r.reportMonth)}</p>
+                      <p className="text-xs text-muted-foreground">{r.partnerName}</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-mono tabular-nums font-medium">{formatUSD(r.totalUsd)}</p>
+                    <p className="text-xs text-muted-foreground font-mono tabular-nums">{formatMXN(r.totalMxn)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-[120px] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+              <p className="text-sm">No hay reportes aun</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

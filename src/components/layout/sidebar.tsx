@@ -6,16 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import {
   LayoutDashboard,
-  Upload,
   FileText,
   Package,
   Users,
-  Building2,
-  ClipboardList,
-  Wallet,
+  Settings,
   CreditCard,
   UserCog,
-  MoreHorizontal,
   LogOut,
   HelpCircle,
   Moon,
@@ -36,18 +32,6 @@ const navigation = [
     roles: ["super_admin", "admin", "collaborator"],
   },
   {
-    title: "Mis Ganancias",
-    href: "/my-earnings",
-    icon: Wallet,
-    roles: ["collaborator"],
-  },
-  {
-    title: "Subir CSV",
-    href: "/upload",
-    icon: Upload,
-    roles: ["super_admin", "admin"],
-  },
-  {
     title: "Reportes",
     href: "/reports",
     icon: FileText,
@@ -57,7 +41,7 @@ const navigation = [
     title: "Productos",
     href: "/products",
     icon: Package,
-    roles: ["super_admin", "admin"],
+    roles: ["super_admin", "admin", "collaborator"],
   },
   {
     title: "Colaboradores",
@@ -81,15 +65,9 @@ const settingsNav = [
     roles: ["super_admin", "admin", "collaborator"],
   },
   {
-    title: "Partners",
-    href: "/settings/partners",
-    icon: Building2,
-    roles: ["super_admin"],
-  },
-  {
-    title: "Audit Log",
-    href: "/settings/audit-log",
-    icon: ClipboardList,
+    title: "Administracion",
+    href: "/settings/admin",
+    icon: Settings,
     roles: ["super_admin", "admin"],
   },
 ];
@@ -110,14 +88,12 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const navRef = useRef<HTMLElement>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const supabase = createClient();
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const handleLogout = async () => {
     await supabase.auth.signOut({ scope: "global" });
-    // Force a hard navigation to clear Next.js router cache completely
     window.location.href = "/login";
   };
 
@@ -149,7 +125,7 @@ export function Sidebar({
   const themeOptions = [
     { value: "light" as const, icon: Sun, label: "Claro" },
     { value: "dark" as const, icon: Moon, label: "Oscuro" },
-    { value: "system" as const, icon: Monitor, label: "Sistema" },
+    { value: "system" as const, icon: Monitor, label: "Auto" },
   ];
 
   const sidebarContent = (
@@ -162,7 +138,6 @@ export function Sidebar({
           </div>
           <span className="text-lg font-semibold tracking-tight">BoxFi</span>
         </Link>
-        {/* Close button - mobile only */}
         <button
           onClick={() => setMobileOpen(false)}
           className="lg:hidden rounded-md p-1 text-muted-foreground hover:bg-muted"
@@ -235,9 +210,10 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* User footer */}
-      <div className="relative border-t px-3 py-3">
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+      {/* Footer: User + Theme + Actions */}
+      <div className="border-t px-3 py-3 space-y-3">
+        {/* User info row */}
+        <div className="flex items-center gap-3 px-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold overflow-hidden">
             {avatarUrl ? (
               <img src={avatarUrl} alt={userName} className="h-full w-full object-cover" />
@@ -249,68 +225,43 @@ export function Sidebar({
             <p className="truncate text-sm font-medium">{shortName}</p>
             <p className="truncate text-xs text-muted-foreground">{partnerName}</p>
           </div>
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+          {/* Theme toggle - compact segmented control */}
+          <div className="flex shrink-0 rounded-md border bg-muted/50 p-0.5">
+            {themeOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setTheme(opt.value)}
+                title={opt.label}
+                className={cn(
+                  "flex items-center justify-center rounded p-1.5 transition-colors",
+                  theme === opt.value
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <opt.icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Dropdown menu */}
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-            <div className="absolute bottom-full left-3 right-3 z-50 mb-1 rounded-lg border bg-card shadow-lg">
-              <div className="p-1">
-                {/* Theme selector */}
-                <div className="px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                    Tema
-                  </p>
-                  <div className="flex gap-1">
-                    {themeOptions.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setTheme(opt.value)}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                          theme === opt.value
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-foreground/65 hover:bg-muted"
-                        )}
-                      >
-                        <opt.icon className="h-3.5 w-3.5" />
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="mx-2 my-1 h-px bg-border" />
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    window.open("https://help.boxfi.com", "_blank");
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground/75 hover:bg-muted transition-colors"
-                >
-                  <HelpCircle className="h-4 w-4" />
-                  Ayuda
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    handleLogout();
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Cerrar Sesion
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+        {/* Help + Logout row */}
+        <div className="flex items-center justify-between px-2">
+          <button
+            onClick={() => window.open("https://help.boxfi.com", "_blank")}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            Ayuda
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 transition-colors"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Cerrar Sesion
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -333,7 +284,7 @@ export function Sidebar({
         />
       )}
 
-      {/* Sidebar - desktop: fixed, mobile: overlay */}
+      {/* Sidebar */}
       <aside
         className={cn(
           "fixed left-0 top-0 z-50 h-screen w-64 border-r bg-[hsl(var(--sidebar-bg))] transition-transform duration-300 ease-in-out",

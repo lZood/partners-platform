@@ -567,7 +567,7 @@ export function PaymentDetailClient({
           <div className="space-y-4 py-4">
             <div className="rounded-lg bg-muted/50 p-4">
               <p className="text-sm text-muted-foreground">Total a pagar</p>
-              <p className="text-3xl font-bold">{formatUSD(selectedTotal)}</p>
+              <p className="text-2xl font-bold">{formatUSD(selectedTotal)}</p>
               <p className="text-sm text-muted-foreground">
                 ≈ {formatMXN(selectedTotal * exchangeRate)}
               </p>

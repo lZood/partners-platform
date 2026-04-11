@@ -327,7 +327,7 @@ export function ProductsClient({
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             {isAdmin ? "Productos" : "Mis Productos"}
           </h1>
           <p className="text-muted-foreground">

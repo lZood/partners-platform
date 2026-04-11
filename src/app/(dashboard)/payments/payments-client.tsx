@@ -120,7 +120,7 @@ export function PaymentsClient({
     <div ref={containerRef} className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Pagos</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Pagos</h1>
           <p className="text-muted-foreground">
             Gestiona los pagos pendientes a colaboradores.
           </p>
