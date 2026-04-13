@@ -610,7 +610,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
               { label: "Miembros", value: validMembers.length, icon: Users, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
               { label: "Productos activos", value: products.filter((p) => p.is_active).length, icon: Package, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/30" },
               { label: "Impuestos activos", value: activeTaxes.length, icon: Receipt, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
-              { label: "Reportes", value: recentReports.length, icon: FileText, color: "text-emerald-600 bg-emerald-50" },
+              { label: "Reportes", value: recentReports.length, icon: FileText, color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30" },
             ].map((stat) => (
               <Card key={stat.label} data-animate-card className="border-0 shadow-sm">
                 <CardContent className="flex items-center gap-4 p-4">

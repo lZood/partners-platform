@@ -37,6 +37,7 @@ export async function createTax(formData: FormData): Promise<ActionResult> {
   if (!user) return { success: false, error: "No autenticado" };
 
   const partnerId = formData.get("partnerId") as string;
+  const taxGroup = parseInt(formData.get("taxGroup") as string) || 0;
 
   // Get next priority order
   const { data: existing } = await supabase
@@ -46,9 +47,8 @@ export async function createTax(formData: FormData): Promise<ActionResult> {
     .order("priority_order", { ascending: false })
     .limit(1);
 
-  const nextOrder = existing && existing.length > 0
-    ? existing[0].priority_order + 1
-    : 1;
+  const nextOrder =
+    existing && existing.length > 0 ? existing[0].priority_order + 1 : 1;
 
   const raw = {
     name: formData.get("name") as string,
@@ -66,6 +66,9 @@ export async function createTax(formData: FormData): Promise<ActionResult> {
     };
   }
 
+  // If taxGroup specified, use it; otherwise assign to its own group (= nextOrder for cascade)
+  const finalGroup = taxGroup > 0 ? taxGroup : nextOrder;
+
   const { data, error } = await supabase
     .from("taxes")
     .insert({
@@ -74,13 +77,14 @@ export async function createTax(formData: FormData): Promise<ActionResult> {
       percentage_rate: parsed.data.percentageRate,
       priority_order: parsed.data.priorityOrder,
       description: parsed.data.description ?? null,
+      tax_group: finalGroup,
     })
     .select()
     .single();
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/settings/taxes");
+  revalidatePath("/settings");
   return { success: true, data };
 }
 
@@ -98,22 +102,27 @@ export async function updateTax(
   const name = formData.get("name") as string;
   const percentageRate = parseFloat(formData.get("percentageRate") as string);
   const description = (formData.get("description") as string) || null;
+  const taxGroupRaw = formData.get("taxGroup");
+  const taxGroup = taxGroupRaw ? parseInt(taxGroupRaw as string) : undefined;
 
   if (!name) return { success: false, error: "El nombre es requerido" };
   if (isNaN(percentageRate) || percentageRate < 0 || percentageRate > 100) {
     return { success: false, error: "La tasa debe estar entre 0 y 100" };
   }
 
+  const updateData: any = { name, percentage_rate: percentageRate, description };
+  if (taxGroup !== undefined) updateData.tax_group = taxGroup;
+
   const { data, error } = await supabase
     .from("taxes")
-    .update({ name, percentage_rate: percentageRate, description })
+    .update(updateData)
     .eq("id", id)
     .select()
     .single();
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/settings/taxes");
+  revalidatePath("/settings");
   return { success: true, data };
 }
 
@@ -124,7 +133,7 @@ export async function deleteTax(id: string): Promise<ActionResult> {
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/settings/taxes");
+  revalidatePath("/settings");
   return { success: true };
 }
 
@@ -141,7 +150,7 @@ export async function toggleTaxActive(
 
   if (error) return { success: false, error: error.message };
 
-  revalidatePath("/settings/taxes");
+  revalidatePath("/settings");
   return { success: true };
 }
 
@@ -160,7 +169,7 @@ export async function reorderTaxes(
   } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "No autenticado" };
 
-  // Update each tax's priority_order
+  // Update all at once — no unique constraint anymore
   for (let i = 0; i < orderedIds.length; i++) {
     const { error } = await supabase
       .from("taxes")
@@ -171,6 +180,27 @@ export async function reorderTaxes(
     if (error) return { success: false, error: error.message };
   }
 
-  revalidatePath("/settings/taxes");
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+/**
+ * Set a tax's group. Taxes in the same group are applied in parallel (on the same base amount).
+ * Different groups are applied in cascade (sequentially).
+ */
+export async function setTaxGroup(
+  id: string,
+  taxGroup: number
+): Promise<ActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const { error } = await supabase
+    .from("taxes")
+    .update({ tax_group: taxGroup })
+    .eq("id", id);
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath("/settings");
   return { success: true };
 }

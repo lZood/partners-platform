@@ -111,13 +111,13 @@ type Tab = "overview" | "distributions" | "history" | "settings";
 // ── Product type colors ─────────────────────────────────────────────
 
 const TYPE_COLORS: Record<string, string> = {
-  skinpack: "bg-purple-100 text-purple-700 border-purple-200",
-  "skin pack": "bg-purple-100 text-purple-700 border-purple-200",
-  minigame: "bg-blue-100 text-blue-700 border-blue-200",
-  "add-on": "bg-green-100 text-green-700 border-green-200",
-  addon: "bg-green-100 text-green-700 border-green-200",
-  world: "bg-amber-100 text-amber-700 border-amber-200",
-  mashup: "bg-pink-100 text-pink-700 border-pink-200",
+  skinpack: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
+  "skin pack": "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
+  minigame: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+  "add-on": "bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
+  addon: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800",
+  world: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  mashup: "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-950 dark:text-pink-300 dark:border-pink-800",
 };
 
 function getTypeBadgeClass(typeName: string): string {
@@ -577,7 +577,7 @@ function DistributionsTab({
     <div className="space-y-6">
       {/* Warning: affected reports */}
       {(hasLockedReports || hasUnlockedReports) && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+        <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
           <div className="flex gap-3">
             <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-2">
@@ -592,7 +592,7 @@ function DistributionsTab({
               </p>
 
               {hasLockedReports && (
-                <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3">
+                <div className="mt-2 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3">
                   <div className="flex items-start gap-2">
                     <Lock className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                     <div>
@@ -660,7 +660,7 @@ function DistributionsTab({
               isValid
                 ? "border-green-200 bg-green-50"
                 : roundedTotal > 100
-                ? "border-red-200 bg-red-50"
+                ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30"
                 : "border-amber-200 bg-amber-50"
             )}
           >

@@ -154,7 +154,8 @@ export function Sidebar({
         {filteredNav.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+            (item.href !== "/" && pathname.startsWith(item.href)) ||
+            (item.href === "/reports" && pathname.startsWith("/upload"));
           return (
             <Link
               key={item.href}

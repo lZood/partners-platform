@@ -20,7 +20,9 @@ import {
   Lock,
   Clock,
   ArrowRightLeft,
+  ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -306,8 +308,15 @@ export function UploadClient({ partners, productTypes }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Subir CSV</h1>
-        <p className="text-muted-foreground">
+        <Link
+          href="/reports"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a Reportes
+        </Link>
+        <h1 className="text-2xl font-bold tracking-tight">Nuevo Reporte</h1>
+        <p className="text-sm text-muted-foreground">
           Sube el archivo Earnings CSV de Microsoft para generar un reporte
           mensual.
         </p>
@@ -450,8 +459,8 @@ export function UploadClient({ partners, productTypes }: Props) {
           )}
 
           {parseErrors.length > 0 && (
-            <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 p-3">
-              <p className="text-sm font-medium text-amber-800 mb-1 flex items-center gap-1">
+            <div className="mt-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 p-3">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1 flex items-center gap-1">
                 <AlertCircle className="h-4 w-4" />
                 Advertencias ({parseErrors.length}):
               </p>
@@ -599,7 +608,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                             {match?.status === "matched" ? (
                               <Badge
                                 variant="secondary"
-                                className="bg-green-100 text-green-700 text-xs gap-1"
+                                className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs gap-1"
                               >
                                 <Check className="h-3 w-3" />
                                 Registrado
@@ -607,7 +616,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                             ) : (
                               <Badge
                                 variant="secondary"
-                                className="bg-amber-100 text-amber-700 text-xs gap-1"
+                                className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs gap-1"
                               >
                                 <AlertTriangle className="h-3 w-3" />
                                 No registrado
@@ -678,8 +687,8 @@ export function UploadClient({ partners, productTypes }: Props) {
             <CardContent>
               <div className="space-y-4">
                 <div className="rounded-md border border-amber-200 bg-amber-50/50 overflow-hidden">
-                  <div className="px-4 py-2 bg-amber-100/50 border-b border-amber-200">
-                    <p className="text-sm font-medium text-amber-800">
+                  <div className="px-4 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
                       Productos por registrar ({unmatchedProducts.length})
                     </p>
                   </div>
@@ -826,7 +835,7 @@ export function UploadClient({ partners, productTypes }: Props) {
           {/* Conflict found — locked */}
           {conflictChecked && existingReport?.isLocked && (
             <CardContent>
-              <div className="rounded-md border border-red-200 bg-red-50 p-4 space-y-3">
+              <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 space-y-3">
                 <div className="flex items-center gap-2 text-red-800">
                   <Lock className="h-5 w-5" />
                   <p className="font-medium">
@@ -871,7 +880,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                       <div>
-                        <p className="font-medium text-amber-800">
+                        <p className="font-medium text-amber-800 dark:text-amber-200">
                           Ya existe un reporte para{" "}
                           <span className="capitalize">
                             {formatMonth(existingReport.reportMonth)}
@@ -1119,7 +1128,7 @@ export function UploadClient({ partners, productTypes }: Props) {
 
       {/* ── Step 6: Generate report ───────────────────────────────── */}
       {canGenerate && !result && (
-        <Card className="border-green-200 bg-green-50/30">
+        <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30/30">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
@@ -1167,7 +1176,7 @@ export function UploadClient({ partners, productTypes }: Props) {
 
       {/* ── Result ────────────────────────────────────────────────── */}
       {result && (
-        <Card className="border-green-200 bg-green-50/50">
+        <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-green-800">
               <CheckCircle2 className="h-5 w-5" />
@@ -1202,8 +1211,8 @@ export function UploadClient({ partners, productTypes }: Props) {
             </div>
 
             {result.skippedErrors?.length > 0 && (
-              <div className="mb-4 rounded-md bg-amber-50 border border-amber-200 p-3">
-                <p className="text-sm font-medium text-amber-800 mb-1">
+              <div className="mb-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 p-3">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1">
                   Productos omitidos ({result.skippedErrors.length}):
                 </p>
                 {result.skippedErrors.map((err: string, i: number) => (

@@ -169,7 +169,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-muted-foreground">Mes Actual</span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600">
                     <DollarSign className="h-4 w-4" />
                   </div>
                 </div>
@@ -182,7 +182,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-muted-foreground">Acumulado</span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600">
                     <TrendingUp className="h-4 w-4" />
                   </div>
                 </div>
@@ -195,7 +195,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-muted-foreground">Pagos</span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/30 text-violet-600">
                     <CreditCard className="h-4 w-4" />
                   </div>
                 </div>
@@ -208,7 +208,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-muted-foreground">Productos</span>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600">
                     <Package className="h-4 w-4" />
                   </div>
                 </div>
@@ -248,7 +248,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 dark:bg-green-950/30">
                       <CheckCircle2 className="h-5 w-5 text-green-600" />
                     </div>
                     <div>

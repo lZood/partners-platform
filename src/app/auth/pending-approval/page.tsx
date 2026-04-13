@@ -25,7 +25,7 @@ export default function PendingApprovalPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+          <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
             <Clock className="h-7 w-7 text-amber-600" />
           </div>
           <CardTitle className="text-xl">Cuenta Pendiente de Aprobacion</CardTitle>
@@ -34,7 +34,7 @@ export default function PendingApprovalPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2">
+          <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-2">
             <div className="flex items-start gap-2">
               <ShieldAlert className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
               <div>
