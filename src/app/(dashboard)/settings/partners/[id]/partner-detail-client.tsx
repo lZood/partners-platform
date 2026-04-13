@@ -63,6 +63,7 @@ import {
   deleteTax,
   toggleTaxActive,
   reorderTaxes,
+  setTaxGroup,
 } from "@/actions/taxes";
 import {
   Select,
@@ -124,6 +125,7 @@ interface PartnerData {
     percentage_rate: number;
     priority_order: number;
     is_active: boolean;
+    tax_group: number;
   }[];
   recentReports: {
     id: string;
@@ -236,9 +238,15 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
     setPermMember(member);
     setPermLoading(true);
     setPermDialogOpen(true);
-    const result = await getUserPermissions(member.id, member.role);
-    setPermValues(result.permissions);
-    setPermLoading(false);
+    try {
+      const result = await getUserPermissions(member.id, member.role);
+      setPermValues(result.permissions);
+    } catch {
+      showToast("Error al cargar permisos", "error");
+      setPermDialogOpen(false);
+    } finally {
+      setPermLoading(false);
+    }
   };
 
   const handleSavePermissions = async () => {
@@ -413,15 +421,45 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
       year: "numeric",
     });
 
-  // Tax cascade preview
+  // Tax cascade preview with parallel group support
   const activeTaxes = taxes.filter((t) => t.is_active);
   const cascadePreview = (() => {
     let remaining = 100;
-    return activeTaxes.map((tax) => {
-      const deducted = remaining * (Number(tax.percentage_rate) / 100);
-      remaining -= deducted;
-      return { ...tax, deducted, remaining };
-    });
+    const result: (typeof activeTaxes[0] & { deducted: number; remaining: number; isParallel: boolean })[] = [];
+
+    // Group taxes by tax_group
+    const groups = new Map<number, typeof activeTaxes>();
+    for (const tax of activeTaxes) {
+      const g = (tax as any).tax_group ?? tax.priority_order;
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g)!.push(tax);
+    }
+
+    // Process groups in order (by lowest priority_order in group)
+    const sortedGroups = Array.from(groups.entries()).sort(
+      (a, b) => Math.min(...a[1].map(t => t.priority_order)) - Math.min(...b[1].map(t => t.priority_order))
+    );
+
+    for (const [, groupTaxes] of sortedGroups) {
+      const isParallel = groupTaxes.length > 1;
+      const baseForGroup = remaining;
+      let totalDeducted = 0;
+
+      for (const tax of groupTaxes) {
+        // Parallel: all taxes in same group use the same base
+        const deducted = baseForGroup * (Number(tax.percentage_rate) / 100);
+        totalDeducted += deducted;
+        result.push({ ...tax, deducted, remaining: 0, isParallel });
+      }
+
+      remaining -= totalDeducted;
+      // Set remaining on last tax of the group
+      if (result.length > 0) {
+        result[result.length - 1].remaining = remaining;
+      }
+    }
+
+    return result;
   })();
 
   return (
@@ -962,8 +1000,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">
-                {taxes.length} impuesto{taxes.length !== 1 ? "s" : ""} · El orden
-                determina la cascada de aplicacion.
+                {taxes.length} impuesto{taxes.length !== 1 ? "s" : ""}. Impuestos en el mismo grupo se aplican en paralelo (sobre el mismo monto base).
               </p>
             </div>
             <Dialog open={taxDialogOpen} onOpenChange={setTaxDialogOpen}>
@@ -985,8 +1022,8 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                       {editingTax ? "Editar Impuesto" : "Nuevo Impuesto"}
                     </DialogTitle>
                     <DialogDescription>
-                      Los impuestos se aplican en cascada: cada uno se calcula
-                      sobre el monto restante del anterior.
+                      Impuestos en el mismo grupo se aplican en paralelo (sobre el mismo monto).
+                      Grupos diferentes se aplican en cascada.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1001,19 +1038,46 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="taxRate">Tasa (%)</Label>
-                      <Input
-                        id="taxRate"
-                        name="percentageRate"
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        placeholder="Ej: 10, 2.5"
-                        defaultValue={editingTax?.percentage_rate ?? ""}
-                        required
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="taxRate">Tasa (%)</Label>
+                        <Input
+                          id="taxRate"
+                          name="percentageRate"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="Ej: 10, 2.5"
+                          defaultValue={editingTax?.percentage_rate ?? ""}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="taxGroup">Grupo</Label>
+                        <Select
+                          name="taxGroup"
+                          defaultValue={String(editingTax?.tax_group ?? 0)}
+                        >
+                          <SelectTrigger id="taxGroup">
+                            <SelectValue placeholder="Seleccionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Nuevo grupo (cascada)</SelectItem>
+                            {Array.from(new Set(taxes.map(t => t.tax_group)))
+                              .sort((a, b) => a - b)
+                              .map(g => {
+                                const groupTaxes = taxes.filter(t => t.tax_group === g);
+                                const names = groupTaxes.map(t => t.name).join(", ");
+                                return (
+                                  <SelectItem key={g} value={String(g)}>
+                                    Grupo {g} ({names})
+                                  </SelectItem>
+                                );
+                              })}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="taxDesc">Descripcion (opcional)</Label>
@@ -1025,13 +1089,13 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                       />
                     </div>
 
-                    {/* Inline warning */}
+                    {/* Inline info */}
                     <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3">
                       <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                       <p className="text-xs text-muted-foreground">
                         {editingTax
                           ? "Al editar este impuesto, los reportes anteriores no se modificaran."
-                          : "El nuevo impuesto se agregara al final de la cascada. Puedes reordenarlo despues."}
+                          : "Selecciona un grupo existente para aplicar en paralelo, o 'Nuevo grupo' para aplicar en cascada despues de los anteriores."}
                       </p>
                     </div>
                   </div>
@@ -1062,35 +1126,40 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
             <Card data-animate-card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  Vista Previa en Cascada
+                  Vista Previa de Impuestos
                 </CardTitle>
                 <CardDescription>
-                  Simulacion de impuestos sobre un ingreso de $100 USD
+                  Simulacion sobre un ingreso de $100 USD
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-2 flex-wrap text-sm mb-3">
-                  <Badge variant="outline" className="text-base px-3 py-1">
-                    $100.00
-                  </Badge>
+                <div className="space-y-2 text-sm mb-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-base px-3 py-1">$100.00</Badge>
+                    <span className="text-xs text-muted-foreground">Bruto</span>
+                  </div>
                   {cascadePreview.map((step, i) => (
-                    <div key={step.id} className="flex items-center gap-2">
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">
-                        -{formatPercentage(Number(step.percentage_rate))}
+                    <div key={step.id} className="flex items-center gap-2 pl-4">
+                      <span className="text-muted-foreground text-xs">
+                        {step.isParallel ? "║" : "→"}
                       </span>
-                      <span className="text-xs text-red-500">
-                        (-${step.deducted.toFixed(2)})
+                      <span className="text-xs">{step.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({formatPercentage(Number(step.percentage_rate))})
                       </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      <Badge
-                        variant={
-                          i === cascadePreview.length - 1 ? "default" : "outline"
-                        }
-                        className="px-3 py-1"
-                      >
-                        ${step.remaining.toFixed(2)}
-                      </Badge>
+                      <span className="text-xs text-red-500 dark:text-red-400">
+                        -${step.deducted.toFixed(2)}
+                      </span>
+                      {step.isParallel && (
+                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-blue-50 dark:bg-blue-950/30 text-blue-600 border-blue-200 dark:border-blue-800">
+                          paralelo
+                        </Badge>
+                      )}
+                      {step.remaining > 0 && (
+                        <span className="text-xs ml-auto font-mono">
+                          = ${step.remaining.toFixed(2)}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1150,12 +1219,16 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                           Inactivo
                         </Badge>
                       )}
+                      {/* Show group indicator if there are other taxes in same group */}
+                      {taxes.filter(t => t.tax_group === tax.tax_group && t.id !== tax.id).length > 0 && (
+                        <Badge variant="outline" className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 border-blue-200 dark:border-blue-800">
+                          Paralelo
+                        </Badge>
+                      )}
                     </div>
-                    {tax.description && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {tax.description}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground truncate">
+                      {tax.description ?? `Grupo ${tax.tax_group}`}
+                    </p>
                   </div>
 
                   {/* Rate */}

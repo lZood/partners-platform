@@ -35,7 +35,7 @@ const DEFAULT_PERMISSIONS: Record<string, PermissionKey[]> = {
 /**
  * Get default permissions for a role.
  */
-export async function getDefaultPermissions(role: string): Promise<PermissionKey[]> {
+export function getDefaultPermissions(role: string): PermissionKey[] {
   return DEFAULT_PERMISSIONS[role] ?? DEFAULT_PERMISSIONS.collaborator;
 }
 
