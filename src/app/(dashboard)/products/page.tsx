@@ -22,8 +22,11 @@ export default async function ProductsPage() {
   const userRole = roles[0]?.role ?? "collaborator";
   const userId = appUser?.id ?? "";
 
-  // Fetch products with distributions and types
-  const { data: products } = await supabase
+  // Determine which partner IDs the user can access
+  const userPartnerIds = roles.map((r: any) => r.partner_id);
+
+  // Fetch products — admin only sees their partners, super_admin sees all
+  let productsQuery = supabase
     .from("products")
     .select(
       `
@@ -50,17 +53,30 @@ export default async function ProductsPage() {
     )
     .order("name", { ascending: true });
 
-  // Fetch product types and partners for the form
+  if (userRole === "admin" && userPartnerIds.length > 0) {
+    productsQuery = productsQuery.in("partner_id", userPartnerIds);
+  }
+
+  const { data: products } = await productsQuery;
+
+  // Fetch product types
   const { data: productTypes } = await supabase
     .from("product_types")
     .select("id, name")
     .order("name");
 
-  const { data: partners } = await supabase
+  // Fetch partners — admin only sees their own, super_admin sees all
+  let partnersQuery = supabase
     .from("partners")
     .select("id, name")
     .eq("is_active", true)
     .order("name");
+
+  if (userRole === "admin" && userPartnerIds.length > 0) {
+    partnersQuery = partnersQuery.in("id", userPartnerIds);
+  }
+
+  const { data: partners } = await partnersQuery;
 
   // Enrich products with distribution validation
   let enriched = (products ?? []).map((p: any) => {
