@@ -190,8 +190,9 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
-  // Members already in this partner
-  const memberUserIds = new Set(members.map((m) => m.users.id));
+  // Filter out members with null/deleted users to prevent crashes
+  const validMembers = members.filter((m) => m.users != null);
+  const memberUserIds = new Set(validMembers.map((m) => m.users.id));
   const availableUsers = allUsers.filter((u) => !memberUserIds.has(u.id));
 
   useEffect(() => {
@@ -501,7 +502,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
             {tab.label}
             {tab.id === "members" && (
               <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                {members.length}
+                {validMembers.length}
               </Badge>
             )}
             {tab.id === "products" && (
@@ -606,9 +607,9 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
           {/* Stats sidebar */}
           <div className="space-y-4">
             {[
-              { label: "Miembros", value: members.length, icon: Users, color: "text-blue-600 bg-blue-50" },
-              { label: "Productos activos", value: products.filter((p) => p.is_active).length, icon: Package, color: "text-violet-600 bg-violet-50" },
-              { label: "Impuestos activos", value: activeTaxes.length, icon: Receipt, color: "text-amber-600 bg-amber-50" },
+              { label: "Miembros", value: validMembers.length, icon: Users, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
+              { label: "Productos activos", value: products.filter((p) => p.is_active).length, icon: Package, color: "text-violet-600 bg-violet-50 dark:bg-violet-950/30" },
+              { label: "Impuestos activos", value: activeTaxes.length, icon: Receipt, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
               { label: "Reportes", value: recentReports.length, icon: FileText, color: "text-emerald-600 bg-emerald-50" },
             ].map((stat) => (
               <Card key={stat.label} data-animate-card className="border-0 shadow-sm">
@@ -646,7 +647,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              {members.length} miembro{members.length !== 1 ? "s" : ""} en este
+              {validMembers.length} miembro{validMembers.length !== 1 ? "s" : ""} en este
               partner
             </p>
             <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
@@ -709,7 +710,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
           </div>
 
           <div className="space-y-2">
-            {members.map((member) => {
+            {validMembers.map((member) => {
               const RoleIcon = roleIcons[member.role] ?? User;
               return (
                 <Card
@@ -778,7 +779,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                 </Card>
               );
             })}
-            {members.length === 0 && (
+            {validMembers.length === 0 && (
               <Card className="border-0 shadow-sm">
                 <CardContent className="flex h-[200px] items-center justify-center text-muted-foreground">
                   <div className="text-center">

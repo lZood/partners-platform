@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { FileText, Lock, Unlock, Eye } from "lucide-react";
+import { FileText, Lock, Unlock, Eye, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -147,13 +147,23 @@ export default async function ReportsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Reportes Mensuales
-        </h1>
-        <p className="text-muted-foreground">
-          Historial de reportes generados por mes.
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Reportes Mensuales
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Historial de reportes generados por mes.
+          </p>
+        </div>
+        {(userRole === "super_admin" || userRole === "admin") && (
+          <Link href="/upload">
+            <Button>
+              <Upload className="mr-2 h-4 w-4" />
+              Nuevo Reporte
+            </Button>
+          </Link>
+        )}
       </div>
 
       {!reports || reports.length === 0 ? (

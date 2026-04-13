@@ -175,7 +175,7 @@ export function PaymentsClient({
               <span className="text-sm text-muted-foreground">
                 Total Pendiente
               </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600">
                 <DollarSign className="h-4 w-4" />
               </div>
             </div>
@@ -188,7 +188,7 @@ export function PaymentsClient({
               <span className="text-sm text-muted-foreground">
                 Con Pagos Pendientes
               </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600">
                 <Users className="h-4 w-4" />
               </div>
             </div>
@@ -201,7 +201,7 @@ export function PaymentsClient({
               <span className="text-sm text-muted-foreground">
                 Colaboradores
               </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600">
                 <Wallet className="h-4 w-4" />
               </div>
             </div>

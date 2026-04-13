@@ -247,13 +247,13 @@ export function Sidebar({
 
         {/* Help + Logout row */}
         <div className="flex items-center justify-between px-2">
-          <button
-            onClick={() => window.open("https://help.boxfi.com", "_blank")}
+          <Link
+            href="/help"
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <HelpCircle className="h-3.5 w-3.5" />
             Ayuda
-          </button>
+          </Link>
           <button
             onClick={handleLogout}
             className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 transition-colors"
