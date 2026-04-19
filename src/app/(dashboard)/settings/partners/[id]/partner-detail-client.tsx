@@ -75,12 +75,11 @@ import {
 import { useToast } from "@/components/shared/toast-provider";
 import { formatUSD, formatMXN, formatMonth, formatPercentage, displayName, getInitials } from "@/lib/utils";
 import {
-  ALL_PERMISSIONS,
   getUserPermissions,
   updateUserPermissions,
   resetToDefaultPermissions,
-  type PermissionKey,
 } from "@/actions/permissions";
+import { ALL_PERMISSIONS, type PermissionKey } from "@/lib/permissions";
 
 interface PartnerData {
   partner: {
