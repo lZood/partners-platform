@@ -41,7 +41,7 @@ const currencyFormat = '"$"#,##0.00';
 
 export async function generateFiscalExcel(data: FiscalExcelData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "BoxFi Partners";
+  wb.creator = "BoxBuild";
 
   // Summary sheet
   const summary = wb.addWorksheet("Resumen Fiscal");

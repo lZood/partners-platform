@@ -34,7 +34,7 @@ export async function generateProductsExcel(
   data: ProductExcelData
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "BoxFi Partners";
+  wb.creator = "BoxBuild";
 
   const ws = wb.addWorksheet("Productos");
 

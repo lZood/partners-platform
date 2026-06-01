@@ -18,7 +18,7 @@ export async function generatePaymentReceiptExcel(
   data: PaymentReceiptData
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "BoxFi Partners";
+  wb.creator = "BoxBuild";
 
   const ws = wb.addWorksheet("Pago", {
     properties: { defaultColWidth: 18 },

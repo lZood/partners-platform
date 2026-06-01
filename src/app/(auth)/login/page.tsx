@@ -368,7 +368,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold shadow-md transition-transform duration-300 hover:scale-105">
             B
           </div>
-          <CardTitle className="text-2xl">BoxFi Partners</CardTitle>
+          <CardTitle className="text-2xl">BoxBuild</CardTitle>
           <CardDescription>
             Inicia sesion para acceder al panel de gestion
           </CardDescription>
