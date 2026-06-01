@@ -25,6 +25,10 @@ export interface MonthlySalesEntry {
   afterTaxesUsd: number;
   finalUsd: number;
   finalMxn: number;
+  // Derivados con el tipo de cambio efectivo del mes (finalMxn / finalUsd).
+  // report_line_items solo guarda final en MXN, asi que el resto se convierte.
+  grossMxn: number;
+  afterTaxesMxn: number;
 }
 
 export interface ProductCollaboratorShare {
@@ -111,14 +115,20 @@ export async function getProductAnalytics(
     }
 
     const monthlySales: MonthlySalesEntry[] = Array.from(monthlyMap.entries())
-      .map(([month, d]) => ({
-        month,
-        label: monthLabel(month),
-        grossUsd: Math.round(d.grossUsd * 100) / 100,
-        afterTaxesUsd: Math.round(d.afterTaxesUsd * 100) / 100,
-        finalUsd: Math.round(d.finalUsd * 100) / 100,
-        finalMxn: Math.round(d.finalMxn * 100) / 100,
-      }))
+      .map(([month, d]) => {
+        // Tipo de cambio efectivo del mes para convertir bruto/post-impuestos a MXN.
+        const rate = d.finalUsd > 0 ? d.finalMxn / d.finalUsd : 0;
+        return {
+          month,
+          label: monthLabel(month),
+          grossUsd: Math.round(d.grossUsd * 100) / 100,
+          afterTaxesUsd: Math.round(d.afterTaxesUsd * 100) / 100,
+          finalUsd: Math.round(d.finalUsd * 100) / 100,
+          finalMxn: Math.round(d.finalMxn * 100) / 100,
+          grossMxn: Math.round(d.grossUsd * rate * 100) / 100,
+          afterTaxesMxn: Math.round(d.afterTaxesUsd * rate * 100) / 100,
+        };
+      })
       .sort((a, b) => a.month.localeCompare(b.month));
 
     // 3. Calculate aggregate metrics

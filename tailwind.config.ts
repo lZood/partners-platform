@@ -8,6 +8,15 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/@tremor/**/*.{js,ts,jsx,tsx}",
   ],
+  // Tremor genera clases de color dinamicamente (fill-*, bg-*, stroke-*, etc.)
+  // que Tailwind purga si no estan en el safelist -> las graficas salian en negro.
+  safelist: [
+    {
+      pattern:
+        /^(bg|text|border|ring|stroke|fill)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(50|100|200|300|400|500|600|700|800|900|950)$/,
+      variants: ["hover", "ui-selected"],
+    },
+  ],
   theme: {
     extend: {
       colors: {

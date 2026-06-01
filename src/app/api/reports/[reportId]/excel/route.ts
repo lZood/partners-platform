@@ -28,6 +28,7 @@ export async function GET(
   }
 
   const r = report as any;
+  const exchangeRate = Number(r.exchange_rates?.usd_to_mxn ?? 1);
 
   // Fetch line items grouped by user
   const { data: lineItems } = await supabase
@@ -38,7 +39,7 @@ export async function GET(
   // Fetch adjustments
   const { data: adjustments } = await supabase
     .from("adjustments")
-    .select("*, users (name)")
+    .select("*, users!adjustments_user_id_fkey (name)")
     .eq("monthly_report_id", reportId);
 
   // Group by user
@@ -85,13 +86,15 @@ export async function GET(
         amountUsd: amount,
       });
       u.totalAdjustmentsUsd += amount;
+      u.totalFinalUsd += amount;
+      u.totalFinalMxn += amount * exchangeRate;
     }
   }
 
   const buffer = await generateReportExcel({
     reportMonth: r.report_month,
     partnerName: r.partners?.name ?? "Partner",
-    exchangeRate: Number(r.exchange_rates?.usd_to_mxn ?? 1),
+    exchangeRate,
     isLocked: r.is_locked,
     grandTotalUsd: Number(r.total_usd ?? 0),
     grandTotalMxn: Number(r.total_mxn ?? 0),

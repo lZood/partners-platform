@@ -1327,6 +1327,135 @@ function DistributionsTab({
   );
 }
 
+// ── Revenue Comparison Chart ────────────────────────────────────────
+
+type ChartCurrency = "USD" | "MXN";
+type ChartPeriod = "month" | "year";
+
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-lg border bg-muted/40 p-0.5">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+            value === opt.value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RevenueComparisonChart({
+  monthlySales,
+}: {
+  monthlySales: ProductAnalyticsData["monthlySales"];
+}) {
+  const [currency, setCurrency] = useState<ChartCurrency>("USD");
+  const [period, setPeriod] = useState<ChartPeriod>("month");
+
+  // Solo ofrecemos vista anual cuando el historial abarca varios anos.
+  const distinctYears = new Set(monthlySales.map((m) => m.month.slice(0, 4)));
+  const canGroupByYear = distinctYears.size > 1;
+  const effectivePeriod: ChartPeriod = canGroupByYear ? period : "month";
+
+  const fmt = currency === "USD" ? formatUSD : formatMXN;
+  const grossKey = currency === "USD" ? "grossUsd" : "grossMxn";
+  const netKey = currency === "USD" ? "finalUsd" : "finalMxn";
+
+  // Construye los datos del grafico con etiquetas en espanol y, si aplica,
+  // agregando por ano.
+  let chartData: { label: string; Bruto: number; Neto: number }[];
+  if (effectivePeriod === "year") {
+    const byYear = new Map<string, { Bruto: number; Neto: number }>();
+    for (const m of monthlySales) {
+      const year = m.month.slice(0, 4);
+      const e = byYear.get(year) ?? { Bruto: 0, Neto: 0 };
+      e.Bruto += (m as any)[grossKey] ?? 0;
+      e.Neto += (m as any)[netKey] ?? 0;
+      byYear.set(year, e);
+    }
+    chartData = Array.from(byYear.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([year, e]) => ({
+        label: year,
+        Bruto: Math.round(e.Bruto * 100) / 100,
+        Neto: Math.round(e.Neto * 100) / 100,
+      }));
+  } else {
+    chartData = monthlySales.map((m) => ({
+      label: m.label,
+      Bruto: (m as any)[grossKey] ?? 0,
+      Neto: (m as any)[netKey] ?? 0,
+    }));
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Comparativa de Ingresos</CardTitle>
+            <CardDescription>
+              Bruto vs Neto en {currency === "USD" ? "dolares" : "pesos"}{" "}
+              {effectivePeriod === "year" ? "por ano" : "por mes"}
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SegmentedControl
+              value={currency}
+              onChange={setCurrency}
+              options={[
+                { value: "USD", label: "USD" },
+                { value: "MXN", label: "MXN" },
+              ]}
+            />
+            {canGroupByYear && (
+              <SegmentedControl
+                value={period}
+                onChange={setPeriod}
+                options={[
+                  { value: "month", label: "Mensual" },
+                  { value: "year", label: "Anual" },
+                ]}
+              />
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <BarChart
+          className="h-72"
+          data={chartData}
+          index="label"
+          categories={["Bruto", "Neto"]}
+          colors={["blue", "emerald"]}
+          valueFormatter={(v: number) => fmt(v)}
+          showLegend
+          showAnimation
+          yAxisWidth={72}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── History Tab ─────────────────────────────────────────────────────
 
 function HistoryTab({
@@ -1442,26 +1571,7 @@ function HistoryTab({
 
       {/* Revenue chart (bar view) */}
       {monthlySales.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Comparativa Mensual</CardTitle>
-            <CardDescription>
-              Bruto vs Neto USD por mes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BarChart
-              className="h-64"
-              data={monthlySales}
-              index="label"
-              categories={["grossUsd", "finalUsd"]}
-              colors={["blue", "green"]}
-              valueFormatter={(v: number) => formatUSD(v)}
-              showLegend
-              showAnimation
-            />
-          </CardContent>
-        </Card>
+        <RevenueComparisonChart monthlySales={monthlySales} />
       )}
 
       {/* Changelog */}

@@ -32,8 +32,12 @@ export async function GET(
       );
     }
 
+    // Supabase's generated types resolve embedded selects to `never` until the
+    // real project types are regenerated, so we read these rows as `any`.
+    const rpt = report as any;
+
     // Fetch line items
-    const { data: lineItems, error: itemsError } = await supabase
+    const { data: lineItemsRaw, error: itemsError } = await supabase
       .from("report_line_items")
       .select(
         `
@@ -57,8 +61,10 @@ export async function GET(
       );
     }
 
+    const lineItems = (lineItemsRaw ?? []) as any[];
+
     // Fetch adjustments
-    const { data: adjustments, error: adjError } = await supabase
+    const { data: adjustmentsRaw, error: adjError } = await supabase
       .from("adjustments")
       .select(
         `
@@ -67,7 +73,7 @@ export async function GET(
         adjustment_type,
         amount_usd,
         description,
-        users (id, name)
+        users!adjustments_user_id_fkey (id, name)
       `
       )
       .eq("monthly_report_id", reportId);
@@ -78,6 +84,8 @@ export async function GET(
         { status: 500 }
       );
     }
+
+    const adjustments = (adjustmentsRaw ?? []) as any[];
 
     // Group line items by user (same logic as report-detail-client.tsx)
     const userMap = new Map<string, any>();
@@ -115,7 +123,7 @@ export async function GET(
     }
 
     // Add adjustments to user summaries
-    const exchangeRate = Number(report.exchange_rates?.usd_to_mxn ?? 0);
+    const exchangeRate = Number(rpt.exchange_rates?.usd_to_mxn ?? 0);
 
     for (const adj of adjustments || []) {
       const uid = adj.user_id;
@@ -159,20 +167,20 @@ export async function GET(
 
     // Generate PDF
     const pdfBuffer = await generateReportPDF({
-      reportMonth: report.report_month,
-      partnerName: report.partners?.name ?? "Unknown",
+      reportMonth: rpt.report_month,
+      partnerName: rpt.partners?.name ?? "Unknown",
       exchangeRate,
-      isLocked: report.is_locked,
+      isLocked: rpt.is_locked,
       userSummaries,
       grandTotalUsd,
       grandTotalMxn,
     });
 
     // Return PDF as response
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="reporte-ganancias-${report.report_month}.pdf"`,
+        "Content-Disposition": `attachment; filename="reporte-ganancias-${rpt.report_month}.pdf"`,
         "Cache-Control": "no-store",
       },
     });

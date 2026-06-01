@@ -21,7 +21,8 @@
       "Bash(rtk tsc *)",
       "Bash(npx tsc *)",
       "Bash(rtk next *)",
-      "Bash(rtk git *)"
+      "Bash(rtk git *)",
+      "Bash(grep -iA2 \"ignoreBuildErrors\\\\|typescript\\\\|eslint\")"
     ]
   }
 }
