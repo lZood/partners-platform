@@ -5,30 +5,30 @@ import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import {
   ArrowLeft,
-  Building2,
+  Buildings,
   Users,
   Package,
   Receipt,
   FileText,
   Pencil,
-  Save,
+  FloppyDisk,
   ToggleLeft,
   ToggleRight,
   UserPlus,
-  Trash2,
+  Trash,
   Lock,
-  Unlock,
-  ChevronRight,
+  LockOpen,
+  CaretRight,
   Shield,
   ShieldCheck,
   User,
   Plus,
   ArrowUp,
   ArrowDown,
-  AlertTriangle,
+  Warning,
   Info,
   Camera,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -151,7 +151,7 @@ interface Props {
 }
 
 const tabs = [
-  { id: "general", label: "General", icon: Building2 },
+  { id: "general", label: "General", icon: Buildings },
   { id: "members", label: "Miembros", icon: Users },
   { id: "products", label: "Productos", icon: Package },
   { id: "taxes", label: "Impuestos", icon: Receipt },
@@ -484,7 +484,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <Building2 className="h-6 w-6 text-primary" />
+              <Buildings className="h-6 w-6 text-primary" />
             )}
           </div>
           <button
@@ -612,7 +612,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                       </button>
                     </div>
                     <Button type="submit" disabled={saving}>
-                      <Save className="mr-2 h-4 w-4" />
+                      <FloppyDisk className="mr-2 h-4 w-4" />
                       {saving ? "Guardando..." : "Guardar"}
                     </Button>
                   </div>
@@ -810,7 +810,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                         handleRemoveMember(member.id, member.users.name)
                       }
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash className="h-3.5 w-3.5" />
                     </Button>
                   </CardContent>
                 </Card>
@@ -916,7 +916,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
               onClick={() => router.push("/products")}
             >
               Ir a Productos
-              <ChevronRight className="ml-1 h-4 w-4" />
+              <CaretRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
 
@@ -982,7 +982,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
           {/* Warning banner */}
           <Card className="border-0 shadow-sm bg-amber-50 dark:bg-amber-950/20">
             <CardContent className="flex items-start gap-3 p-4">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <Warning className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-sm">
                 <p className="font-medium text-amber-800 dark:text-amber-200">
                   Importante sobre los cambios de impuestos
@@ -1266,7 +1266,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                       className="h-8 w-8 text-destructive hover:text-destructive"
                       onClick={() => handleDeleteTax(tax)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </CardContent>
@@ -1353,7 +1353,7 @@ export function PartnerDetailClient({ data, allUsers }: Props) {
                           {report.is_locked ? (
                             <Lock className="h-4 w-4 text-green-600" />
                           ) : (
-                            <Unlock className="h-4 w-4 text-amber-500" />
+                            <LockOpen className="h-4 w-4 text-amber-500" />
                           )}
                         </div>
                         <div>

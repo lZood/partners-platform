@@ -1,8 +1,68 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { partnerSchema } from "@/lib/validations/schemas";
+import { ACTIVE_PARTNER_COOKIE } from "@/lib/partner-constants";
+
+export async function setActivePartner(
+  partnerId: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createServerSupabaseClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: "No autenticado" };
+  }
+
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("id, user_partner_roles(role, partner_id)")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  const roles = ((appUser as any)?.user_partner_roles ?? []) as Array<{
+    role: string;
+    partner_id: string;
+  }>;
+
+  const isSuperAdmin = roles.some((r) => r.role === "super_admin");
+
+  // Super admins can switch to any partner in the system; everyone else is
+  // restricted to partners they hold an explicit role for.
+  if (!isSuperAdmin) {
+    const allowed = roles.some((r) => r.partner_id === partnerId);
+    if (!allowed) {
+      return {
+        success: false,
+        error: "No tienes permiso para acceder a este partner",
+      };
+    }
+  } else {
+    // Validate the partner actually exists so we don't store garbage cookies.
+    const { data: partner } = await supabase
+      .from("partners")
+      .select("id")
+      .eq("id", partnerId)
+      .maybeSingle();
+    if (!partner) {
+      return { success: false, error: "Partner no encontrado" };
+    }
+  }
+
+  cookies().set(ACTIVE_PARTNER_COOKIE, partnerId, {
+    httpOnly: false,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+
+  revalidatePath("/", "layout");
+  return { success: true };
+}
 
 export type PartnerActionResult = {
   success: boolean;

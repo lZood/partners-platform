@@ -2,10 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { generateReceiptPDF } from "@/lib/pdf/receipt-pdf";
+import {
+  generateReceiptPDF,
+  type PaymentReceiptData,
+  type PaymentReceiptProductRow,
+  type PaymentReceiptConceptRow,
+} from "@/lib/pdf/receipt-pdf";
 import { uploadBuffer } from "@/lib/supabase/storage-server";
 import { createNotification } from "@/actions/notifications";
 import { sendPaymentNotificationEmail } from "@/lib/email";
+import { formatMonth } from "@/lib/utils";
 
 export type PaymentActionResult = {
   success: boolean;
@@ -352,6 +358,176 @@ export async function getUserPaymentDetail(
 }
 
 /**
+ * Build the full data set for a payment receipt (PDF/Excel).
+ *
+ * Expands the aggregated `report_earnings` payment items back into their
+ * underlying per-product `report_line_items` so the receipt can show the
+ * distribution (percentage + product type) the collaborator was paid for.
+ * Extra concepts are surfaced separately. Best-effort fetches the partner
+ * logo. Returns null if the payment does not exist.
+ */
+export async function getPaymentReceiptData(
+  paymentId: string
+): Promise<PaymentReceiptData | null> {
+  const supabase = createServerSupabaseClient();
+
+  const { data: payment } = await supabase
+    .from("payments")
+    .select(`
+      id, total_usd, total_mxn, exchange_rate, payment_method, notes, paid_at, user_id,
+      partners (name, logo_url),
+      users!payments_user_id_fkey (name, email),
+      created_by_user:users!payments_created_by_fkey (name),
+      payment_items (item_type, reference_id, description, amount_usd, amount_mxn)
+    `)
+    .eq("id", paymentId)
+    .single();
+
+  if (!payment) return null;
+  const p = payment as any;
+  const rate = Number(p.exchange_rate) || 1;
+
+  const items = (p.payment_items ?? []) as any[];
+  const reportItems = items.filter(
+    (i) => i.item_type === "report_earnings" && i.reference_id
+  );
+  const conceptItems = items.filter((i) => i.item_type !== "report_earnings");
+  const reportIds = reportItems.map((i) => i.reference_id);
+
+  const products: PaymentReceiptProductRow[] = [];
+  const periodSet = new Set<string>();
+
+  if (reportIds.length > 0) {
+    const { data: lineItems } = await supabase
+      .from("report_line_items")
+      .select(`
+        product_name, percentage_applied, final_usd, final_mxn, report_id,
+        products (product_types (name)),
+        monthly_reports!inner (report_month)
+      `)
+      .in("report_id", reportIds)
+      .eq("user_id", p.user_id);
+
+    for (const li of (lineItems ?? []) as any[]) {
+      const period = li.monthly_reports?.report_month
+        ? formatMonth(li.monthly_reports.report_month)
+        : "";
+      if (period) periodSet.add(period);
+
+      const pct =
+        li.percentage_applied != null ? Number(li.percentage_applied) : null;
+      const type = li.products?.product_types?.name ?? null;
+      const distParts: string[] = [];
+      if (pct != null) distParts.push(formatPctShort(pct));
+      if (type) distParts.push(type);
+
+      products.push({
+        product: li.product_name ?? "Producto",
+        distribution: distParts.join(" · ") || "—",
+        percentage: pct,
+        productType: type,
+        amountUsd: Number(li.final_usd ?? 0),
+        amountMxn: Number(li.final_mxn ?? 0),
+        salesPeriod: period,
+      });
+    }
+  }
+
+  // Fallback: a paid report with no resolvable line items still needs to
+  // appear so the totals reconcile — surface the aggregated payment item.
+  if (products.length === 0 && reportItems.length > 0) {
+    for (const ri of reportItems) {
+      products.push({
+        product: ri.description ?? "Comisiones",
+        distribution: "—",
+        percentage: null,
+        productType: null,
+        amountUsd: Number(ri.amount_usd ?? 0),
+        amountMxn: Number(ri.amount_mxn ?? 0),
+        salesPeriod: "",
+      });
+    }
+  }
+
+  products.sort((a, b) =>
+    a.salesPeriod === b.salesPeriod
+      ? a.product.localeCompare(b.product)
+      : a.salesPeriod.localeCompare(b.salesPeriod)
+  );
+
+  const concepts: PaymentReceiptConceptRow[] = conceptItems.map((c) => {
+    const amountUsd = Number(c.amount_usd ?? 0);
+    const isDeduction = amountUsd < 0 || /deduc/i.test(c.description ?? "");
+    return {
+      description: c.description ?? "Concepto",
+      amountUsd,
+      amountMxn: Number(c.amount_mxn ?? 0),
+      isDeduction,
+    };
+  });
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const productsSubtotalUsd = round2(
+    products.reduce((s, r) => s + r.amountUsd, 0)
+  );
+  const productsSubtotalMxn = round2(
+    products.reduce((s, r) => s + r.amountMxn, 0)
+  );
+  const conceptsSubtotalUsd = round2(
+    concepts.reduce((s, c) => s + c.amountUsd, 0)
+  );
+  const conceptsSubtotalMxn = round2(
+    concepts.reduce((s, c) => s + c.amountMxn, 0)
+  );
+
+  // Best-effort partner logo fetch for the PDF header.
+  let partnerLogo: Buffer | null = null;
+  const logoUrl = p.partners?.logo_url ?? null;
+  if (logoUrl) {
+    try {
+      const res = await fetch(logoUrl);
+      if (res.ok) {
+        partnerLogo = Buffer.from(await res.arrayBuffer());
+      }
+    } catch {
+      partnerLogo = null;
+    }
+  }
+
+  return {
+    paymentId: p.id,
+    partnerName: p.partners?.name ?? "Partner",
+    partnerLogoUrl: logoUrl,
+    partnerLogo,
+    userName: p.users?.name ?? "—",
+    userEmail: p.users?.email ?? null,
+    paidAt: p.paid_at,
+    salesPeriods: Array.from(periodSet).sort(),
+    exchangeRate: rate,
+    products,
+    concepts,
+    productsSubtotalUsd,
+    productsSubtotalMxn,
+    conceptsSubtotalUsd,
+    conceptsSubtotalMxn,
+    totalUsd: Number(p.total_usd),
+    totalMxn: Number(p.total_mxn),
+    paymentMethod: p.payment_method,
+    notes: p.notes,
+    createdByName: p.created_by_user?.name ?? null,
+  };
+}
+
+/** Format a distribution percentage without trailing ".00" (e.g. "20%", "12.5%"). */
+function formatPctShort(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  const str = Number.isInteger(rounded)
+    ? String(rounded)
+    : String(rounded).replace(/0+$/, "");
+  return `${str}%`;
+}
+
+/**
  * Create a payment concept (extra charge/bonus/deduction).
  */
 export async function createPaymentConcept(
@@ -559,52 +735,26 @@ export async function registerPayment(
 
   const paymentId = (payment as any).id;
 
-  // Generate and store receipt PDF
+  // Generate and store receipt PDF (redesigned layout with per-product
+  // distribution breakdown). Reuses the shared receipt-data builder so the
+  // stored PDF matches the on-demand PDF/Excel exports exactly.
   try {
-    // Get user and partner info for receipt
-    const { data: payUser } = await supabase
-      .from("users")
-      .select("name, email")
-      .eq("id", data.userId)
-      .single();
+    const receiptData = await getPaymentReceiptData(paymentId);
+    if (receiptData) {
+      const pdfBuffer = await generateReceiptPDF(receiptData);
 
-    const { data: payPartner } = await supabase
-      .from("partners")
-      .select("name, logo_url")
-      .eq("id", data.partnerId)
-      .single();
+      const uploadResult = await uploadBuffer(
+        "receipts",
+        `${paymentId}.pdf`,
+        pdfBuffer
+      );
 
-    const pdfBuffer = await generateReceiptPDF({
-      paymentId,
-      partnerName: (payPartner as any)?.name ?? "Partner",
-      partnerLogoUrl: (payPartner as any)?.logo_url ?? null,
-      userName: (payUser as any)?.name ?? "—",
-      userEmail: (payUser as any)?.email ?? null,
-      totalUsd: Math.round(totalUsd * 100) / 100,
-      totalMxn: Math.round(totalMxn * 100) / 100,
-      exchangeRate: data.exchangeRate,
-      paymentMethod: data.paymentMethod ?? null,
-      notes: data.notes ?? null,
-      paidAt: new Date().toISOString(),
-      createdByName: null,
-      items: items.map((i) => ({
-        description: i.description,
-        amountUsd: i.amount_usd,
-        amountMxn: i.amount_mxn,
-      })),
-    });
-
-    const uploadResult = await uploadBuffer(
-      "receipts",
-      `${paymentId}.pdf`,
-      pdfBuffer
-    );
-
-    if ("url" in uploadResult) {
-      await supabase
-        .from("payments")
-        .update({ receipt_url: uploadResult.url })
-        .eq("id", paymentId);
+      if ("url" in uploadResult) {
+        await supabase
+          .from("payments")
+          .update({ receipt_url: uploadResult.url })
+          .eq("id", paymentId);
+      }
     }
   } catch (pdfError) {
     // Don't fail the payment if PDF generation fails
@@ -626,7 +776,7 @@ export async function registerPayment(
         type: "payment_received",
         title: "Pago recibido",
         message: `Se registro un pago de $${Math.round(totalUsd * 100) / 100} USD a tu favor.`,
-        link: "/my-earnings",
+        link: "/my-income",
       });
 
       if (pu.email) {

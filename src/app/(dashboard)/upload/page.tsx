@@ -1,22 +1,24 @@
+import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getActivePartnerContext } from "@/lib/active-partner";
 import { UploadClient } from "./upload-client";
 
 export default async function UploadPage() {
-  const supabase = createServerSupabaseClient();
+  const ctx = await getActivePartnerContext();
+  if (!ctx) redirect("/login");
+  if (ctx.role === "collaborator") redirect("/");
 
-  const [partnersRes, typesRes] = await Promise.all([
-    supabase
-      .from("partners")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name"),
-    supabase.from("product_types").select("id, name").order("name"),
-  ]);
+  const supabase = createServerSupabaseClient();
+  const { data: typesRes } = await supabase
+    .from("product_types")
+    .select("id, name")
+    .order("name");
 
   return (
     <UploadClient
-      partners={partnersRes.data ?? []}
-      productTypes={typesRes.data ?? []}
+      partners={ctx.accessiblePartners}
+      productTypes={typesRes ?? []}
+      defaultPartnerId={ctx.activePartnerId ?? undefined}
     />
   );
 }

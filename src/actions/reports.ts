@@ -291,7 +291,7 @@ export async function generateReport(
           type: "report_generated" as const,
           title: "Nuevo reporte de ganancias",
           message: `Se genero un reporte para ${pName} (${monthLabel}). Tus ganancias: $${userTotal.toFixed(2)} USD.`,
-          link: `/my-earnings`,
+          link: `/my-income`,
         };
       });
       await createNotificationsBatch(notifications);

@@ -1,68 +1,70 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Navbar } from "@/components/layout/navbar";
+import { SidebarShell } from "@/components/layout/sidebar-shell";
+import { MainContent } from "@/components/layout/main-content";
 import { getUnreadCount } from "@/actions/notifications";
+import { getActivePartnerContext } from "@/lib/active-partner";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const ctx = await getActivePartnerContext();
+  if (!ctx) {
     redirect("/login");
   }
 
-  // Get user profile and role
-  const { data: appUser } = await supabase
+  const supabase = createServerSupabaseClient();
+  const { data: profile } = await supabase
     .from("users")
-    .select(
-      `
-      id,
-      name,
-      email,
-      avatar_url,
-      user_partner_roles (
-        role,
-        partner_id,
-        partners (name)
-      )
-    `
-    )
-    .eq("auth_user_id", user.id)
-    .single();
+    .select("name, email, avatar_url")
+    .eq("id", ctx.appUserId ?? "")
+    .maybeSingle();
 
-  const userRole =
-    (appUser?.user_partner_roles as any)?.[0]?.role ?? "collaborator";
-  const partnerName =
-    (appUser?.user_partner_roles as any)?.[0]?.partners?.name ?? "Sin Partner";
-  const userName = appUser?.name ?? user.email ?? "Usuario";
-  const appUserId = appUser?.id ?? "";
-  const unreadCount = appUserId ? await getUnreadCount(appUserId) : 0;
+  const userName =
+    (profile as any)?.name ?? (profile as any)?.email ?? "Usuario";
+  const avatarUrl = (profile as any)?.avatar_url ?? null;
+  const unreadCount = ctx.appUserId ? await getUnreadCount(ctx.appUserId) : 0;
+
+  const canSwitchPartner =
+    ctx.isSuperAdmin && ctx.accessiblePartners.length > 1;
+
+  // Partner shown in the navbar selector. Non super admins only see their own.
+  const navbarPartners = ctx.isSuperAdmin
+    ? ctx.accessiblePartners
+    : ctx.activePartnerId
+      ? [
+          {
+            id: ctx.activePartnerId,
+            name: ctx.activePartnerName ?? "Partner",
+            logoUrl: ctx.activePartnerLogoUrl,
+          },
+        ]
+      : [];
+
+  const sidebarCollapsed = cookies().get("sidebar_collapsed")?.value === "1";
 
   return (
-    <div className="min-h-screen bg-background">
+    <SidebarShell collapsed={sidebarCollapsed}>
       <Sidebar
-        userRole={userRole}
+        userRole={ctx.role}
         userName={userName}
-        partnerName={partnerName}
-        avatarUrl={(appUser as any)?.avatar_url ?? null}
+        avatarUrl={avatarUrl}
       />
-      <div className="lg:pl-64">
-        <Navbar
-          userName={userName}
-          userRole={userRole}
-          partnerName={partnerName}
-          userId={appUserId}
-          unreadCount={unreadCount}
-        />
-        <main className="px-4 pb-8 pt-2 lg:px-6">{children}</main>
-      </div>
-    </div>
+      <Navbar
+        userName={userName}
+        userRole={ctx.role}
+        userId={ctx.appUserId ?? ""}
+        unreadCount={unreadCount}
+        partners={navbarPartners}
+        activePartnerId={ctx.activePartnerId ?? ""}
+        canSwitchPartner={canSwitchPartner}
+      />
+      <MainContent>{children}</MainContent>
+    </SidebarShell>
   );
 }

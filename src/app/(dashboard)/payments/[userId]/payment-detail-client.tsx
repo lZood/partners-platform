@@ -7,17 +7,18 @@ import {
   ArrowLeft,
   Wallet,
   Plus,
-  Trash2,
+  Trash,
   FileText,
-  CheckCircle2,
+  CheckCircle,
   Clock,
-  Download,
-  DollarSign,
+  FilePdf,
+  FileXls,
+  CurrencyDollar,
   Briefcase,
   Gift,
   MinusCircle,
   Star,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -353,7 +354,7 @@ export function PaymentDetailClient({
           ) : (
             <div className="flex h-[100px] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
               <div className="text-center">
-                <CheckCircle2 className="mx-auto h-6 w-6 mb-1 text-green-500" />
+                <CheckCircle className="mx-auto h-6 w-6 mb-1 text-green-500" />
                 <p className="text-sm">Todo pagado</p>
               </div>
             </div>
@@ -522,7 +523,7 @@ export function PaymentDetailClient({
                         handleDeleteConcept(concept.id);
                       }}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 );
@@ -633,7 +634,7 @@ export function PaymentDetailClient({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-50">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-4 w-4 text-green-600" />
                       </div>
                       <div>
                         <p className="text-sm font-medium">
@@ -648,19 +649,34 @@ export function PaymentDetailClient({
                         </p>
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        window.open(
-                          `/api/payments/${payment.id}/receipt`,
-                          "_blank"
-                        )
-                      }
-                    >
-                      <Download className="mr-1.5 h-3.5 w-3.5" />
-                      Recibo
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            `/api/payments/${payment.id}/receipt`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        <FilePdf className="mr-1.5 h-3.5 w-3.5" />
+                        PDF
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          window.open(
+                            `/api/payments/${payment.id}/excel`,
+                            "_blank"
+                          )
+                        }
+                      >
+                        <FileXls className="mr-1.5 h-3.5 w-3.5" />
+                        Excel
+                      </Button>
+                    </div>
                   </div>
                   {/* Items breakdown */}
                   <div className="space-y-1 pl-12">

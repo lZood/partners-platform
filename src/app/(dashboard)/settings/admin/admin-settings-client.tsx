@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, ClipboardList } from "lucide-react";
+import { Buildings, ClipboardText } from "@phosphor-icons/react";
 import { PartnersClient } from "../partners/partners-client";
 import { AuditLogClient } from "../audit-log/audit-log-client";
 import { cn } from "@/lib/utils";
@@ -19,9 +19,9 @@ export function AdminSettingsClient({
 }: Props) {
   const tabs = [
     ...(isSuperAdmin
-      ? [{ key: "partners", label: "Partners", icon: Building2 }]
+      ? [{ key: "partners", label: "Partners", icon: Buildings }]
       : []),
-    { key: "activity", label: "Registro de Actividad", icon: ClipboardList },
+    { key: "activity", label: "Registro de Actividad", icon: ClipboardText },
   ];
 
   const [activeTab, setActiveTab] = useState(tabs[0]?.key ?? "activity");

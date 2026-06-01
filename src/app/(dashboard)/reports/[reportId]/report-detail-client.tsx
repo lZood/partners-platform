@@ -6,11 +6,11 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Lock,
-  Unlock,
+  LockOpen,
   Plus,
-  Trash2,
-  FileDown,
-} from "lucide-react";
+  Trash,
+  FileArrowDown,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -224,7 +224,7 @@ export function ReportDetailClient({
             </Badge>
           ) : (
             <Badge variant="warning" className="gap-1">
-              <Unlock className="h-3 w-3" />
+              <LockOpen className="h-3 w-3" />
               Abierto
             </Badge>
           )}
@@ -232,13 +232,13 @@ export function ReportDetailClient({
             <>
               <a href={`/api/reports/${report.id}/pdf`} target="_blank">
                 <Button variant="outline" size="sm">
-                  <FileDown className="mr-2 h-4 w-4" />
+                  <FileArrowDown className="mr-2 h-4 w-4" />
                   PDF
                 </Button>
               </a>
               <a href={`/api/reports/${report.id}/excel`} target="_blank">
                 <Button variant="outline" size="sm">
-                  <FileDown className="mr-2 h-4 w-4" />
+                  <FileArrowDown className="mr-2 h-4 w-4" />
                   Excel
                 </Button>
               </a>
@@ -250,7 +250,7 @@ export function ReportDetailClient({
               >
                 {report.is_locked ? (
                   <>
-                    <Unlock className="mr-2 h-4 w-4" />
+                    <LockOpen className="mr-2 h-4 w-4" />
                     Desbloquear
                   </>
                 ) : (
@@ -558,7 +558,7 @@ export function ReportDetailClient({
                             className="text-destructive"
                             onClick={() => handleDeleteAdjustment(adj.id)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash className="h-4 w-4" />
                           </Button>
                         </td>
                       )}

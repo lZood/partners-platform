@@ -1,31 +1,18 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getProductsRevenueSummary } from "@/actions/product-analytics";
+import { getActivePartnerContext } from "@/lib/active-partner";
 import { ProductsClient } from "./products-client";
 
 export default async function ProductsPage() {
+  const ctx = await getActivePartnerContext();
+  if (!ctx) redirect("/login");
+
   const supabase = createServerSupabaseClient();
 
-  // Get current user info
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: appUser } = await supabase
-    .from("users")
-    .select("id, user_partner_roles (role, partner_id)")
-    .eq("auth_user_id", user.id)
-    .single();
-
-  const roles = (appUser?.user_partner_roles as any[]) ?? [];
-  const userRole = roles[0]?.role ?? "collaborator";
-  const userId = appUser?.id ?? "";
-
-  // Determine which partner IDs the user can access
-  const userPartnerIds = roles.map((r: any) => r.partner_id);
-
-  // Fetch products — admin only sees their partners, super_admin sees all
+  // Fetch products scoped to:
+  //   - collaborators: products where they have a distribution (filtered later)
+  //   - admin / super_admin: products of the currently active partner
   let productsQuery = supabase
     .from("products")
     .select(
@@ -53,30 +40,23 @@ export default async function ProductsPage() {
     )
     .order("name", { ascending: true });
 
-  if (userRole === "admin" && userPartnerIds.length > 0) {
-    productsQuery = productsQuery.in("partner_id", userPartnerIds);
+  if (ctx.role !== "collaborator" && ctx.activePartnerId) {
+    productsQuery = productsQuery.eq("partner_id", ctx.activePartnerId);
+  } else if (
+    ctx.role !== "collaborator" &&
+    ctx.accessiblePartnerIds.length > 0
+  ) {
+    productsQuery = productsQuery.in("partner_id", ctx.accessiblePartnerIds);
   }
 
   const { data: products } = await productsQuery;
 
-  // Fetch product types
   const { data: productTypes } = await supabase
     .from("product_types")
     .select("id, name")
     .order("name");
 
-  // Fetch partners — admin only sees their own, super_admin sees all
-  let partnersQuery = supabase
-    .from("partners")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("name");
-
-  if (userRole === "admin" && userPartnerIds.length > 0) {
-    partnersQuery = partnersQuery.in("id", userPartnerIds);
-  }
-
-  const { data: partners } = await partnersQuery;
+  const partners = ctx.accessiblePartners;
 
   // Enrich products with distribution validation
   let enriched = (products ?? []).map((p: any) => {
@@ -91,14 +71,15 @@ export default async function ProductsPage() {
     };
   });
 
-  // For collaborators: only show products where they have a distribution
-  if (userRole === "collaborator") {
+  // Collaborators: only products where they hold a distribution
+  if (ctx.role === "collaborator") {
     enriched = enriched.filter((p: any) =>
-      (p.product_distributions ?? []).some((d: any) => d.user_id === userId)
+      (p.product_distributions ?? []).some(
+        (d: any) => d.user_id === ctx.appUserId
+      )
     );
   }
 
-  // Get revenue summaries for all products
   const productIds = enriched.map((p: any) => p.id);
   const revenueResult = await getProductsRevenueSummary(productIds);
 
@@ -113,10 +94,10 @@ export default async function ProductsPage() {
     <ProductsClient
       initialProducts={enriched}
       productTypes={productTypes ?? []}
-      partners={partners ?? []}
+      partners={partners}
       revenueSummaries={revenueSummaries}
-      userRole={userRole}
-      userId={userId}
+      userRole={ctx.role}
+      userId={ctx.appUserId ?? ""}
     />
   );
 }

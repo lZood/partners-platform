@@ -5,17 +5,17 @@ import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import { AreaChart } from "@tremor/react";
 import {
-  DollarSign,
+  CurrencyDollar,
   Wallet,
   Package,
   CreditCard,
   Download,
   Bell,
   Calendar,
-  TrendingUp,
-  CheckCircle2,
+  TrendUp,
+  CheckCircle,
   Clock,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import {
   Card,
   CardContent,
@@ -170,7 +170,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-muted-foreground">Mes Actual</span>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600">
-                    <DollarSign className="h-4 w-4" />
+                    <CurrencyDollar className="h-4 w-4" />
                   </div>
                 </div>
                 <p className="text-2xl font-bold">$<span ref={monthRef}>0</span></p>
@@ -183,7 +183,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-muted-foreground">Acumulado</span>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600">
-                    <TrendingUp className="h-4 w-4" />
+                    <TrendUp className="h-4 w-4" />
                   </div>
                 </div>
                 <p className="text-2xl font-bold">$<span ref={totalRef}>0</span></p>
@@ -249,7 +249,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 dark:bg-green-950/30">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <CheckCircle className="h-5 w-5 text-green-600" />
                     </div>
                     <div>
                       <p className="text-lg font-bold">{formatUSD(lastPayment.totalUsd)}</p>
@@ -294,7 +294,7 @@ export function DashboardCollaborator({ data, userName }: Props) {
               ) : (
                 <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
                   <div className="text-center">
-                    <TrendingUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
+                    <TrendUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
                     <p className="text-sm">Sin datos de ganancias aun</p>
                   </div>
                 </div>

@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react";
 import {
-  ClipboardList,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
+  ClipboardText,
+  CaretLeft,
+  CaretRight,
+  CaretDown,
+  CaretUp,
   Plus,
   Pencil,
-  Trash2,
-  Filter,
-  Loader2,
-} from "lucide-react";
+  Trash,
+  Funnel,
+  CircleNotch,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,7 +50,7 @@ const TABLE_LABELS: Record<string, string> = {
 const ACTION_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   created: { label: "Creado", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300", icon: Plus },
   updated: { label: "Actualizado", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300", icon: Pencil },
-  deleted: { label: "Eliminado", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300", icon: Trash2 },
+  deleted: { label: "Eliminado", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300", icon: Trash},
 };
 
 export function AuditLogClient({ initialData }: Props) {
@@ -181,7 +181,7 @@ export function AuditLogClient({ initialData }: Props) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Filter className="h-4 w-4" />
+            <Funnel className="h-4 w-4" />
             Filtros
           </CardTitle>
         </CardHeader>
@@ -213,7 +213,7 @@ export function AuditLogClient({ initialData }: Props) {
             </div>
             <Button size="sm" onClick={applyFilters} disabled={loading}>
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                <CircleNotch className="h-4 w-4 animate-spin mr-1" />
               ) : null}
               Aplicar
             </Button>
@@ -239,7 +239,7 @@ export function AuditLogClient({ initialData }: Props) {
           {data.entries.length === 0 ? (
             <div className="flex h-[300px] items-center justify-center rounded-md border border-dashed text-muted-foreground">
               <div className="text-center">
-                <ClipboardList className="mx-auto h-10 w-10 mb-3" />
+                <ClipboardText className="mx-auto h-10 w-10 mb-3" />
                 <p className="font-medium">Sin registros de auditoria</p>
                 <p className="text-sm mt-1">
                   Los cambios se registran automaticamente via triggers.
@@ -299,9 +299,9 @@ export function AuditLogClient({ initialData }: Props) {
                           {entry.recordId.substring(0, 8)}...
                         </span>
                         {isExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          <CaretUp className="h-4 w-4 text-muted-foreground" />
                         ) : (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          <CaretDown className="h-4 w-4 text-muted-foreground" />
                         )}
                       </div>
                     </div>
@@ -330,7 +330,7 @@ export function AuditLogClient({ initialData }: Props) {
                   onClick={() => fetchPage(data.page - 1)}
                   disabled={data.page <= 1 || loading}
                 >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  <CaretLeft className="h-4 w-4 mr-1" />
                   Anterior
                 </Button>
                 <Button
@@ -340,7 +340,7 @@ export function AuditLogClient({ initialData }: Props) {
                   disabled={data.page >= data.totalPages || loading}
                 >
                   Siguiente
-                  <ChevronRight className="h-4 w-4 ml-1" />
+                  <CaretRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
             </div>

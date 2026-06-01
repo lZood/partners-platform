@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, ArrowLeft } from "lucide-react";
+import { Shield, ArrowLeft, CircleNotch } from "@phosphor-icons/react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -212,10 +212,21 @@ export default function LoginPage() {
   // ── 2FA Verification Screen ──
   if (needs2FA) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
-        <Card className="w-full max-w-md">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-background via-muted/40 to-primary/5 px-4">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-32 -left-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-in fade-in duration-700"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-32 -right-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-in fade-in duration-700"
+        />
+        <Card
+          key="2fa"
+          className="w-full max-w-md border-border/60 bg-card/95 shadow-xl backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-4 duration-500 ease-out"
+        >
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md transition-transform duration-300 hover:scale-105">
               <Shield className="h-6 w-6" />
             </div>
             <CardTitle className="text-2xl">
@@ -230,13 +241,16 @@ export default function LoginPage() {
           <form onSubmit={handle2FAVerify}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
                   {error}
                 </div>
               )}
 
               {useRecoveryCode ? (
-                <div className="space-y-2">
+                <div
+                  key="recovery-field"
+                  className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
                   <label htmlFor="recovery" className="text-sm font-medium">
                     Codigo de respaldo
                   </label>
@@ -246,7 +260,7 @@ export default function LoginPage() {
                     placeholder="XXXX-XXXX"
                     value={recoveryCode}
                     onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
-                    className="text-center text-xl tracking-wider font-mono"
+                    className="text-center text-xl tracking-wider font-mono transition-all duration-200 focus-visible:ring-offset-0 focus-visible:scale-[1.01]"
                     autoFocus
                     required
                   />
@@ -255,7 +269,10 @@ export default function LoginPage() {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div
+                  key="totp-field"
+                  className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
                   <label htmlFor="totp" className="text-sm font-medium">
                     Codigo de 6 digitos
                   </label>
@@ -270,7 +287,7 @@ export default function LoginPage() {
                     onChange={(e) =>
                       setTotpCode(e.target.value.replace(/\D/g, ""))
                     }
-                    className="text-center text-2xl tracking-[0.5em] font-mono"
+                    className="text-center text-2xl tracking-[0.5em] font-mono transition-all duration-200 focus-visible:ring-offset-0 focus-visible:scale-[1.01]"
                     autoFocus
                     required
                   />
@@ -280,7 +297,7 @@ export default function LoginPage() {
             <CardFooter className="flex flex-col gap-3">
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full transition-all duration-200 hover:shadow-md active:scale-[0.98]"
                 disabled={
                   loading ||
                   (useRecoveryCode
@@ -288,7 +305,14 @@ export default function LoginPage() {
                     : totpCode.length !== 6)
                 }
               >
-                {loading ? "Verificando..." : "Verificar"}
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <CircleNotch className="h-4 w-4 animate-spin" />
+                    Verificando...
+                  </span>
+                ) : (
+                  "Verificar"
+                )}
               </Button>
               <button
                 type="button"
@@ -298,7 +322,7 @@ export default function LoginPage() {
                   setTotpCode("");
                   setRecoveryCode("");
                 }}
-                className="text-sm text-primary hover:underline"
+                className="text-sm text-primary transition-colors duration-150 hover:underline"
               >
                 {useRecoveryCode
                   ? "Usar codigo de autenticacion"
@@ -313,9 +337,9 @@ export default function LoginPage() {
                   setUseRecoveryCode(false);
                   setError("");
                 }}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="group flex items-center gap-1 text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground"
               >
-                <ArrowLeft className="h-3 w-3" />
+                <ArrowLeft className="h-3 w-3 transition-transform duration-200 group-hover:-translate-x-0.5" />
                 Volver al login
               </button>
             </CardFooter>
@@ -327,10 +351,21 @@ export default function LoginPage() {
 
   // ── Normal Login Screen ──
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
-      <Card className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-background via-muted/40 to-primary/5 px-4">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 -left-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-in fade-in duration-700"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-32 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-in fade-in duration-700"
+      />
+      <Card
+        key="login"
+        className="w-full max-w-md border-border/60 bg-card/95 shadow-xl backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-4 duration-500 ease-out"
+      >
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold shadow-md transition-transform duration-300 hover:scale-105">
             B
           </div>
           <CardTitle className="text-2xl">BoxFi Partners</CardTitle>
@@ -341,7 +376,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
                 {error}
               </div>
             )}
@@ -349,11 +384,15 @@ export default function LoginPage() {
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="w-full transition-all duration-200 hover:shadow-sm hover:bg-accent/60 active:scale-[0.98]"
               onClick={handleGoogleLogin}
               disabled={googleLoading || loading}
             >
-              <GoogleIcon className="h-5 w-5 mr-2" />
+              {googleLoading ? (
+                <CircleNotch className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <GoogleIcon className="h-5 w-5 mr-2" />
+              )}
               {googleLoading ? "Redirigiendo..." : "Continuar con Google"}
             </Button>
 
@@ -376,6 +415,7 @@ export default function LoginPage() {
                 placeholder="tu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="transition-all duration-200 focus-visible:ring-offset-0 focus-visible:scale-[1.005]"
                 required
               />
             </div>
@@ -386,7 +426,7 @@ export default function LoginPage() {
                 </label>
                 <Link
                   href="/forgot-password"
-                  className="text-xs text-primary hover:underline"
+                  className="text-xs text-primary transition-colors duration-150 hover:underline"
                 >
                   Olvidaste tu contrasena?
                 </Link>
@@ -397,17 +437,32 @@ export default function LoginPage() {
                 placeholder="Tu contrasena"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className="transition-all duration-200 focus-visible:ring-offset-0 focus-visible:scale-[1.005]"
                 required
               />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Iniciando sesion..." : "Iniciar sesion"}
+            <Button
+              type="submit"
+              className="w-full transition-all duration-200 hover:shadow-md active:scale-[0.98]"
+              disabled={loading}
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <CircleNotch className="h-4 w-4 animate-spin" />
+                  Iniciando sesion...
+                </span>
+              ) : (
+                "Iniciar sesion"
+              )}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               No tienes cuenta?{" "}
-              <Link href="/register" className="text-primary hover:underline">
+              <Link
+                href="/register"
+                className="text-primary transition-colors duration-150 hover:underline"
+              >
                 Solicitar acceso
               </Link>
             </p>

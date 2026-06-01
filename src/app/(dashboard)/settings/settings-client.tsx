@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { User, Building2, Save, Camera, Link2, Unlink, CheckCircle2 } from "lucide-react";
+import { User, Buildings, FloppyDisk, Camera, LinkSimple, LinkBreak, CheckCircle } from "@phosphor-icons/react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -280,7 +280,7 @@ export function SettingsClient({ user, userRole, partner, googleLinked, googleEm
                 </Badge>
               </div>
               <Button type="submit" disabled={savingUser}>
-                <Save className="mr-2 h-4 w-4" />
+                <FloppyDisk className="mr-2 h-4 w-4" />
                 {savingUser ? "Guardando..." : "Guardar"}
               </Button>
             </div>
@@ -299,7 +299,7 @@ export function SettingsClient({ user, userRole, partner, googleLinked, googleEm
                     <p className="text-sm font-medium">Google</p>
                     {googleLinked && (
                       <span className="flex items-center gap-1 text-xs text-green-600">
-                        <CheckCircle2 className="h-3 w-3" />
+                        <CheckCircle className="h-3 w-3" />
                         Vinculada
                       </span>
                     )}
@@ -320,7 +320,7 @@ export function SettingsClient({ user, userRole, partner, googleLinked, googleEm
                   disabled={unlinkingGoogle}
                   className="text-destructive hover:text-destructive"
                 >
-                  <Unlink className="mr-1.5 h-3.5 w-3.5" />
+                  <LinkBreak className="mr-1.5 h-3.5 w-3.5" />
                   {unlinkingGoogle ? "Desvinculando..." : "Desvincular"}
                 </Button>
               ) : (
@@ -330,7 +330,7 @@ export function SettingsClient({ user, userRole, partner, googleLinked, googleEm
                   onClick={handleLinkGoogle}
                   disabled={linkingGoogle}
                 >
-                  <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                  <LinkSimple className="mr-1.5 h-3.5 w-3.5" />
                   {linkingGoogle ? "Redirigiendo..." : "Vincular"}
                 </Button>
               )}
@@ -345,7 +345,7 @@ export function SettingsClient({ user, userRole, partner, googleLinked, googleEm
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Building2 className="h-5 w-5 text-primary" />
+                <Buildings className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <CardTitle>Datos del Partner</CardTitle>
@@ -379,7 +379,7 @@ export function SettingsClient({ user, userRole, partner, googleLinked, googleEm
               </div>
               <div className="flex justify-end">
                 <Button type="submit" disabled={savingPartner}>
-                  <Save className="mr-2 h-4 w-4" />
+                  <FloppyDisk className="mr-2 h-4 w-4" />
                   {savingPartner ? "Guardando..." : "Guardar"}
                 </Button>
               </div>

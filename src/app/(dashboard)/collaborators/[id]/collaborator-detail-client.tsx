@@ -8,23 +8,23 @@ import {
   ArrowLeft,
   User,
   Ghost,
-  Building2,
+  Buildings,
   Package,
-  DollarSign,
+  CurrencyDollar,
   Clock,
-  Save,
+  FloppyDisk,
   Camera,
   ToggleLeft,
   ToggleRight,
-  Trash2,
+  Trash,
   Plus,
   Shield,
   CreditCard,
   Download,
-  CheckCircle2,
+  CheckCircle,
   FileText,
   Pencil,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -90,9 +90,9 @@ interface Props {
 
 const tabs = [
   { id: "general", label: "General", icon: User },
-  { id: "partners", label: "Partners", icon: Building2 },
+  { id: "partners", label: "Partners", icon: Buildings },
   { id: "products", label: "Productos", icon: Package },
-  { id: "earnings", label: "Ganancias", icon: DollarSign },
+  { id: "earnings", label: "Ganancias", icon: CurrencyDollar },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -255,7 +255,7 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
           </Button>
           {isSuperAdmin && (
             <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={handleDelete}>
-              <Trash2 className="h-4 w-4" />
+              <Trash className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -297,7 +297,7 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
                 </div>
                 <div className="flex justify-end">
                   <Button type="submit" disabled={saving}>
-                    <Save className="mr-2 h-4 w-4" />{saving ? "Guardando..." : "Guardar"}
+                    <FloppyDisk className="mr-2 h-4 w-4" />{saving ? "Guardando..." : "Guardar"}
                   </Button>
                 </div>
               </form>
@@ -380,7 +380,7 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
             <Card key={role.id} data-animate-card className="border-0 shadow-sm">
               <CardContent className="flex items-center gap-4 p-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <Building2 className="h-5 w-5 text-primary" />
+                  <Buildings className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium">{role.partners?.name ?? "—"}</p>
@@ -395,7 +395,7 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
                 </Select>
                 {roles.length > 1 && (
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemovePartner(role.id, role.partners?.name)}>
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash className="h-3.5 w-3.5" />
                   </Button>
                 )}
               </CardContent>
@@ -476,7 +476,7 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
                   {payments.map((p) => (
                     <div key={p.id} className="flex items-center justify-between rounded-lg p-3 bg-muted/30">
                       <div className="flex items-center gap-3">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        <CheckCircle className="h-4 w-4 text-green-500" />
                         <div>
                           <p className="text-sm font-medium">{formatUSD(p.totalUsd)}</p>
                           <p className="text-xs text-muted-foreground">{formatDate(p.paidAt)}{p.paymentMethod && ` · ${p.paymentMethod}`}</p>

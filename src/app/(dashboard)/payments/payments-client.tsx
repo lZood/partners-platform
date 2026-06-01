@@ -5,16 +5,16 @@ import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import {
   Wallet,
-  ChevronRight,
-  Search,
-  AlertCircle,
+  CaretRight,
+  MagnifyingGlass,
+  WarningCircle,
   Clock,
-  DollarSign,
+  CurrencyDollar,
   Users,
   Download,
   CheckSquare,
   CreditCard,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -176,7 +176,7 @@ export function PaymentsClient({
                 Total Pendiente
               </span>
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600">
-                <DollarSign className="h-4 w-4" />
+                <CurrencyDollar className="h-4 w-4" />
               </div>
             </div>
             <p className="text-2xl font-bold">{formatUSD(totalPending)}</p>
@@ -212,7 +212,7 @@ export function PaymentsClient({
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar colaborador..."
           value={search}
@@ -315,7 +315,7 @@ export function PaymentsClient({
                         variant="destructive"
                         className="text-[10px] gap-1"
                       >
-                        <AlertCircle className="h-3 w-3" />
+                        <WarningCircle className="h-3 w-3" />
                         {collab.unpaidMonths} meses
                       </Badge>
                     )}
@@ -356,7 +356,7 @@ export function PaymentsClient({
                 </div>
 
                 {/* Arrow */}
-                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                <CaretRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
               </CardContent>
             </Card>
           ))}

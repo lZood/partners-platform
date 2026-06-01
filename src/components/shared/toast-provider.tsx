@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { X, CheckCircle2, AlertCircle } from "lucide-react";
+import { X, CheckCircle, WarningCircle, Info } from "@phosphor-icons/react";
 
-type ToastType = "success" | "error";
+type ToastType = "success" | "error" | "info";
 
 interface Toast {
   id: number;
@@ -54,13 +54,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               "flex items-center gap-2 rounded-lg border px-4 py-3 shadow-lg animate-in slide-in-from-right-full duration-300",
               toast.type === "success"
                 ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/80 dark:border-green-800 dark:text-green-200"
+                : toast.type === "info"
+                ? "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/80 dark:border-blue-800 dark:text-blue-200"
                 : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/80 dark:border-red-800 dark:text-red-200"
             )}
           >
             {toast.type === "success" ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <CheckCircle className="h-4 w-4 shrink-0" />
+            ) : toast.type === "info" ? (
+              <Info className="h-4 w-4 shrink-0" />
             ) : (
-              <AlertCircle className="h-4 w-4 shrink-0" />
+              <WarningCircle className="h-4 w-4 shrink-0" />
             )}
             <span className="text-sm">{toast.message}</span>
             <button

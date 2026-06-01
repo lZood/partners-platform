@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Envelope, CheckCircle } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,7 +43,7 @@ export default function ForgotPasswordPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
+              <CheckCircle className="h-6 w-6 text-green-600" />
             </div>
             <CardTitle className="text-2xl">Correo enviado</CardTitle>
             <CardDescription className="text-base">
@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Mail className="h-6 w-6" />
+            <Envelope className="h-6 w-6" />
           </div>
           <CardTitle className="text-2xl">Recuperar contrasena</CardTitle>
           <CardDescription>

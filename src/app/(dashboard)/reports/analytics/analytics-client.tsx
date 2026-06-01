@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import { BarChart, DonutChart, AreaChart } from "@tremor/react";
 import {
-  DollarSign,
-  TrendingUp,
+  CurrencyDollar,
+  TrendUp,
   CreditCard,
-  AlertCircle,
+  WarningCircle,
   Download,
-  BarChart3,
-} from "lucide-react";
+  ChartBar,
+} from "@phosphor-icons/react";
 import {
   Card,
   CardContent,
@@ -128,7 +128,7 @@ export function AnalyticsClient({ data, year, partnerId, partners }: Props) {
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Bruto</span>
-              <DollarSign className="h-4 w-4 text-blue-500" />
+              <CurrencyDollar className="h-4 w-4 text-blue-500" />
             </div>
             <p className="text-2xl font-bold">{formatUSD(data.totals.totalGrossUsd)}</p>
           </CardContent>
@@ -137,7 +137,7 @@ export function AnalyticsClient({ data, year, partnerId, partners }: Props) {
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Neto</span>
-              <TrendingUp className="h-4 w-4 text-emerald-500" />
+              <TrendUp className="h-4 w-4 text-emerald-500" />
             </div>
             <p className="text-2xl font-bold">{formatUSD(data.totals.totalNetUsd)}</p>
           </CardContent>
@@ -155,7 +155,7 @@ export function AnalyticsClient({ data, year, partnerId, partners }: Props) {
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">Pendiente</span>
-              <AlertCircle className="h-4 w-4 text-red-500" />
+              <WarningCircle className="h-4 w-4 text-red-500" />
             </div>
             <p className="text-2xl font-bold text-red-600">{formatUSD(data.totals.totalPendingUsd)}</p>
           </CardContent>

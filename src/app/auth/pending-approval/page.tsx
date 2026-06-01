@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Clock, LogOut, ShieldAlert } from "lucide-react";
+import { Clock, SignOut, ShieldWarning } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,7 +36,7 @@ export default function PendingApprovalPage() {
         <CardContent className="space-y-4">
           <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-2">
             <div className="flex items-start gap-2">
-              <ShieldAlert className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <ShieldWarning className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-amber-800">
                   Un administrador debe aprobar tu acceso
@@ -63,7 +63,7 @@ export default function PendingApprovalPage() {
             className="w-full"
             onClick={handleLogout}
           >
-            <LogOut className="h-4 w-4 mr-2" />
+            <SignOut className="h-4 w-4 mr-2" />
             Cerrar sesion
           </Button>
         </CardContent>

@@ -5,26 +5,26 @@ import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import { AreaChart } from "@tremor/react";
 import {
-  DollarSign,
+  CurrencyDollar,
   Package,
   Users,
   FileText,
-  TrendingUp,
-  TrendingDown,
+  TrendUp,
+  TrendDown,
   Minus,
   Lock,
-  Unlock,
-  ChevronRight,
+  LockOpen,
+  CaretRight,
   Wallet,
-  Building2,
+  Buildings,
   Bell,
   Calendar,
-  AlertCircle,
+  WarningCircle,
   CreditCard,
   UserPlus,
   Clock,
-  CalendarDays,
-} from "lucide-react";
+  CalendarBlank,
+} from "@phosphor-icons/react";
 import {
   Card,
   CardContent,
@@ -47,6 +47,7 @@ import {
   formatMonth,
   displayName,
   getInitials,
+  cn,
 } from "@/lib/utils";
 import type {
   DashboardData,
@@ -58,12 +59,11 @@ import type {
 interface Props {
   data: DashboardData;
   extra: AdminDashboardExtra | null;
-  partners: { id: string; name: string }[];
-  currentPartnerId?: string;
   currentDateFrom?: string;
   currentDateTo?: string;
   userRole: string;
   userName: string;
+  partnerName?: string;
 }
 
 type DatePreset = "this_month" | "last_month" | "this_quarter" | "this_year" | "last_3_months" | "last_6_months" | "custom";
@@ -116,12 +116,14 @@ function fmt(d: Date): string {
 
 function useCountUp(end: number, duration: number = 0.8) {
   const ref = useRef<HTMLSpanElement>(null);
-  const hasAnimated = useRef(false);
+  const lastValueRef = useRef(0);
   useEffect(() => {
-    if (!ref.current || hasAnimated.current) return;
-    hasAnimated.current = true;
-    const obj = { value: 0 };
-    gsap.to(obj, {
+    if (!ref.current) return;
+    if (lastValueRef.current === end) return;
+    const start = lastValueRef.current;
+    lastValueRef.current = end;
+    const obj = { value: start };
+    const tween = gsap.to(obj, {
       value: end,
       duration,
       ease: "power2.out",
@@ -133,6 +135,9 @@ function useCountUp(end: number, duration: number = 0.8) {
         }
       },
     });
+    return () => {
+      tween.kill();
+    };
   }, [end, duration]);
   return ref;
 }
@@ -215,7 +220,7 @@ function NotificationFeed({ notifications }: { notifications: Notification[] }) 
     payment_registered: CreditCard,
     payment_received: Wallet,
     user_unassigned: UserPlus,
-    concept_added: DollarSign,
+    concept_added: CurrencyDollar,
   };
 
   const colors: Record<string, string> = {
@@ -268,18 +273,16 @@ function NotificationFeed({ notifications }: { notifications: Notification[] }) 
 export function DashboardClient({
   data,
   extra,
-  partners,
-  currentPartnerId,
   currentDateFrom,
   currentDateTo,
   userRole,
   userName,
+  partnerName,
 }: Props) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const { stats, monthlyTrends, productTypeProfitability, topProducts, recentReports } = data;
 
-  const [selectedPartner, setSelectedPartner] = useState(currentPartnerId ?? "");
   const [datePreset, setDatePreset] = useState<DatePreset>(
     currentDateFrom ? "custom" : "this_month"
   );
@@ -287,20 +290,12 @@ export function DashboardClient({
   const [customTo, setCustomTo] = useState(currentDateTo ?? "");
   const [showCustom, setShowCustom] = useState(false);
 
-  const buildUrl = (partner: string, from?: string, to?: string) => {
+  const buildUrl = (from?: string, to?: string) => {
     const params = new URLSearchParams();
-    if (partner) params.set("partner", partner);
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     const qs = params.toString();
     return qs ? `/?${qs}` : "/";
-  };
-
-  const handlePartnerChange = (value: string) => {
-    const p = value === "all" ? "" : value;
-    setSelectedPartner(p);
-    const range = datePreset !== "this_month" ? getDateRange(datePreset) : null;
-    router.push(buildUrl(p, range?.from, range?.to));
   };
 
   const handleDatePresetChange = (value: string) => {
@@ -312,12 +307,12 @@ export function DashboardClient({
     }
     setShowCustom(false);
     const range = getDateRange(preset);
-    router.push(buildUrl(selectedPartner, range?.from, range?.to));
+    router.push(buildUrl(range?.from, range?.to));
   };
 
   const applyCustomRange = () => {
     if (customFrom && customTo) {
-      router.push(buildUrl(selectedPartner, customFrom, customTo));
+      router.push(buildUrl(customFrom, customTo));
       setShowCustom(false);
     }
   };
@@ -337,7 +332,7 @@ export function DashboardClient({
       ? ((stats.currentMonthUsd - stats.previousMonthUsd) / stats.previousMonthUsd) * 100
       : stats.currentMonthUsd > 0 ? 100 : 0;
 
-  const MomIcon = momChange > 0 ? TrendingUp : momChange < 0 ? TrendingDown : Minus;
+  const MomIcon = momChange > 0 ? TrendUp : momChange < 0 ? TrendDown : Minus;
   const momColor = momChange > 0 ? "text-green-600" : momChange < 0 ? "text-red-600" : "text-muted-foreground";
 
   const usdFormatter = (v: number) => formatUSD(v);
@@ -347,14 +342,49 @@ export function DashboardClient({
   const pendingRef = useCountUp(extra?.totalPendingPayments ?? 0);
   const paidRef = useCountUp(extra?.totalPaidThisMonth ?? 0);
 
+  const periodLabel = currentDateFrom
+    ? "Periodo"
+    : datePresets.find((p) => p.value === datePreset)?.label ?? "Este Mes";
+
   return (
     <div ref={containerRef} className="space-y-6">
-      {/* Filters bar */}
-      {isAdmin && (
-        <div data-animate-card className="flex items-center justify-end gap-3 flex-wrap">
-          {/* Date range */}
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+      {/* Hero — period summary + date range */}
+      <div data-animate-card className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+            {periodLabel}
+          </p>
+          <div className="flex items-baseline gap-3 mt-1">
+            <p className="text-[34px] leading-none font-bold tracking-tight tabular-nums">
+              $<span ref={usdRef}>0</span>
+            </p>
+            {(stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0) && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                  momChange > 0
+                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                    : momChange < 0
+                      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                      : "bg-muted text-muted-foreground"
+                )}
+              >
+                <MomIcon className="h-3 w-3" />
+                {momChange > 0 ? "+" : ""}
+                {momChange.toFixed(1)}%
+              </span>
+            )}
+          </div>
+          {partnerName && (
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Resumen de <span className="font-medium text-foreground">{partnerName}</span>
+            </p>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <CalendarBlank className="h-4 w-4 text-muted-foreground" />
             <Select value={datePreset} onValueChange={handleDatePresetChange}>
               <SelectTrigger className="w-[170px] h-9 text-sm">
                 <SelectValue />
@@ -365,134 +395,144 @@ export function DashboardClient({
                 ))}
               </SelectContent>
             </Select>
+            {showCustom && (
+              <>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="h-9 rounded-lg border bg-card px-2 text-sm"
+                />
+                <span className="text-xs text-muted-foreground">a</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="h-9 rounded-lg border bg-card px-2 text-sm"
+                />
+                <Button size="sm" variant="outline" onClick={applyCustomRange} disabled={!customFrom || !customTo}>
+                  Aplicar
+                </Button>
+              </>
+            )}
           </div>
-
-          {/* Custom date inputs */}
-          {showCustom && (
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="h-9 rounded-md border bg-card px-2 text-sm"
-              />
-              <span className="text-xs text-muted-foreground">a</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="h-9 rounded-md border bg-card px-2 text-sm"
-              />
-              <Button size="sm" variant="outline" onClick={applyCustomRange} disabled={!customFrom || !customTo}>
-                Aplicar
-              </Button>
-            </div>
-          )}
-
-          {/* Partner selector */}
-          {partners.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Partner:</span>
-              <Select value={selectedPartner || "all"} onValueChange={handlePartnerChange}>
-                <SelectTrigger className="w-[180px] h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Partners</SelectItem>
-                  {partners.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Unassigned users alert */}
       {extra && extra.unassignedUsersCount > 0 && (
-        <div data-animate-card className="flex items-center gap-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 cursor-pointer" onClick={() => router.push("/collaborators")}>
-          <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+        <div
+          data-animate-card
+          className="flex items-center gap-3 rounded-xl border border-amber-200/60 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+          onClick={() => router.push("/collaborators")}
+        >
+          <WarningCircle className="h-5 w-5 text-amber-600 shrink-0" />
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{extra.unassignedUsersCount} usuario(s) esperando asignacion</p>
-          <ChevronRight className="h-4 w-4 text-amber-600 ml-auto shrink-0" />
+          <CaretRight className="h-4 w-4 text-amber-600 ml-auto shrink-0" />
         </div>
       )}
 
       {/* Stats row */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card data-animate-card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">
-                {currentDateFrom ? "Ingresos Periodo" : "Ingresos Mes"}
-              </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/30 text-blue-600">
-                <DollarSign className="h-4 w-4" />
+              <span className="text-xs font-medium text-muted-foreground">Pendiente Pago</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-red-50 dark:bg-red-950/30 text-red-600">
+                <Wallet className="h-3.5 w-3.5" />
               </div>
             </div>
-            <p className="text-2xl font-bold">$<span ref={usdRef}>0</span></p>
-            {(stats.previousMonthUsd > 0 || stats.currentMonthUsd > 0) && (
-              <p className={`text-xs flex items-center gap-1 mt-1 ${momColor}`}>
-                <MomIcon className="h-3 w-3" />
-                {momChange > 0 ? "+" : ""}{momChange.toFixed(1)}% vs periodo anterior
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">Pendiente Pago</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600">
-                <Wallet className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-red-600">$<span ref={pendingRef}>0</span></p>
-            <p className="text-xs text-muted-foreground mt-1">Por pagar a colaboradores</p>
-          </CardContent>
-        </Card>
-
-        <Card data-animate-card className="transition-card hover-lift border-0 shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-medium text-muted-foreground">
-                {currentDateFrom ? "Pagado Periodo" : "Pagado este Mes"}
-              </span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50 dark:bg-green-950/30 text-green-600">
-                <CreditCard className="h-4 w-4" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-green-600">$<span ref={paidRef}>0</span></p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats.activeProducts} productos · {stats.activeCollaborators} colaboradores
+            <p className="text-[22px] leading-none font-bold tabular-nums text-red-600">
+              $<span ref={pendingRef}>0</span>
             </p>
+            <p className="text-[11px] text-muted-foreground mt-2">Por pagar a colaboradores</p>
+          </CardContent>
+        </Card>
+
+        <Card data-animate-card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-muted-foreground">
+                {currentDateFrom ? "Pagado periodo" : "Pagado este mes"}
+              </span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-green-50 dark:bg-green-950/30 text-green-600">
+                <CreditCard className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <p className="text-[22px] leading-none font-bold tabular-nums text-green-600">
+              $<span ref={paidRef}>0</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Liquidados a colaboradores
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card data-animate-card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-muted-foreground">Productos activos</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-600">
+                <Package className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <p className="text-[22px] leading-none font-bold tabular-nums">
+              {stats.activeProducts}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-2">En catálogo</p>
+          </CardContent>
+        </Card>
+
+        <Card data-animate-card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-medium text-muted-foreground">Colaboradores</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-50 dark:bg-violet-950/30 text-violet-600">
+                <Users className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <p className="text-[22px] leading-none font-bold tabular-nums">
+              {stats.activeCollaborators}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-2">Activos en este partner</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Revenue Trend */}
-      <Card data-animate-card className="border-0 shadow-sm">
+      <Card data-animate-card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Tendencia de Ingresos</CardTitle>
+          <div className="flex items-baseline justify-between">
+            <CardTitle>Ingresos por mes</CardTitle>
+            {monthlyTrends.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                Últimos {monthlyTrends.length} meses · USD
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {monthlyTrends.length > 0 ? (
             <AreaChart
-              className="h-56"
-              data={monthlyTrends}
+              className="h-56 [&_.recharts-cartesian-axis-line]:stroke-transparent [&_.recharts-cartesian-grid-horizontal_line]:stroke-border/60 [&_.recharts-cartesian-grid-vertical_line]:stroke-transparent [&_.recharts-text]:fill-muted-foreground [&_.recharts-text]:text-[11px]"
+              data={monthlyTrends.map((m) => ({
+                label: m.label,
+                Ingresos: m.totalUsd,
+              }))}
               index="label"
-              categories={["totalUsd", "totalMxn"]}
-              colors={["blue", "emerald"]}
+              categories={["Ingresos"]}
+              colors={["blue"]}
               valueFormatter={usdFormatter}
-              yAxisWidth={72}
-              showLegend
+              yAxisWidth={64}
+              showLegend={false}
+              showGridLines
               curveType="monotone"
+              startEndOnly={monthlyTrends.length > 6}
             />
           ) : (
             <div className="flex h-56 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
               <div className="text-center">
-                <TrendingUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
+                <TrendUp className="mx-auto h-8 w-8 mb-2 opacity-40" />
                 <p className="text-sm">Sin datos de tendencia</p>
               </div>
             </div>
@@ -509,7 +549,7 @@ export function DashboardClient({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Pagos Pendientes</CardTitle>
                 <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/payments")}>
-                  Ver Todos <ChevronRight className="h-4 w-4" />
+                  Ver Todos <CaretRight className="h-4 w-4" />
                 </Button>
               </div>
             </CardHeader>
@@ -544,7 +584,7 @@ export function DashboardClient({
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Top Productos</CardTitle>
               <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/products")}>
-                Ver Todos <ChevronRight className="h-4 w-4" />
+                Ver Todos <CaretRight className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
@@ -573,7 +613,7 @@ export function DashboardClient({
             <CardTitle className="text-base">Reportes Recientes</CardTitle>
             {recentReports.length > 0 && (
               <Button variant="link" size="sm" className="text-primary gap-1" onClick={() => router.push("/reports")}>
-                Ver Todos <ChevronRight className="h-4 w-4" />
+                Ver Todos <CaretRight className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -585,7 +625,7 @@ export function DashboardClient({
                 <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg p-3 hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => router.push(`/reports/${r.id}`)}>
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      {r.isLocked ? <Lock className="h-4 w-4 text-green-600" /> : <Unlock className="h-4 w-4 text-amber-500" />}
+                      {r.isLocked ? <Lock className="h-4 w-4 text-green-600" /> : <LockOpen className="h-4 w-4 text-amber-500" />}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium capitalize truncate">{formatMonth(r.reportMonth)}</p>

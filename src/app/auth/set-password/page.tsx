@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import {
   Lock,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
+  CheckCircle,
+  WarningCircle,
+  CircleNotch,
   XCircle,
-  KeyRound,
+  Key,
   Shield,
   ArrowLeft,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { activateCurrentUser } from "@/actions/users";
 import {
   check2FAEnabled,
@@ -259,7 +259,7 @@ export default function SetPasswordPage() {
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+              <CircleNotch className="h-8 w-8 animate-spin text-primary mb-4" />
               <p className="text-muted-foreground">Verificando sesion...</p>
             </div>
           </CardContent>
@@ -418,7 +418,7 @@ export default function SetPasswordPage() {
           <CardContent className="pt-6">
             <div className="text-center space-y-3">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <h2 className="text-xl font-bold">
                 {isPasswordChange
@@ -445,7 +445,7 @@ export default function SetPasswordPage() {
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             {isPasswordChange ? (
-              <KeyRound className="h-6 w-6" />
+              <Key className="h-6 w-6" />
             ) : (
               <Lock className="h-6 w-6" />
             )}
@@ -479,7 +479,7 @@ export default function SetPasswordPage() {
           <CardContent className="space-y-4">
             {formError && (
               <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <WarningCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{formError}</span>
               </div>
             )}
@@ -518,7 +518,7 @@ export default function SetPasswordPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                   Guardando...
                 </>
               ) : isPasswordChange ? (

@@ -6,29 +6,35 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Plus,
-  Trash2,
-  Save,
-  AlertCircle,
-  CheckCircle2,
+  Trash,
+  FloppyDisk,
+  WarningCircle,
+  CheckCircle,
   Ghost,
   User,
-  TrendingUp,
-  TrendingDown,
+  UserPlus,
+  Envelope,
+  TrendUp,
+  TrendDown,
   Calendar,
-  DollarSign,
-  BarChart3,
+  CurrencyDollar,
+  ChartBar,
   Clock,
   Users,
-  Settings,
-  History,
-  PieChart,
+  Gear,
+  ClockCounterClockwise,
+  ChartPie,
   FileText,
   Pencil,
   Lock,
-  ShieldAlert,
+  ShieldWarning,
   Camera,
   Package,
-} from "lucide-react";
+  Pulse,
+  Sparkle,
+  Moon,
+  Warning,
+} from "@phosphor-icons/react";
 import { AreaChart, BarChart } from "@tremor/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,7 +54,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { saveDistributions } from "@/actions/distributions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { saveDistributions, addCollaboratorForProduct } from "@/actions/distributions";
+import {
+  computeHealth,
+  computeForecast,
+  type ProductHealth,
+  type ProductForecast,
+  type HealthStatus,
+} from "@/lib/analytics/product-health";
 import { updateProduct, toggleProductActive, updateProductImage, updateProductLifecycle } from "@/actions/products";
 import { uploadFile, getFileExtension } from "@/lib/supabase/storage";
 import { useToast } from "@/components/shared/toast-provider";
@@ -100,6 +121,7 @@ interface Props {
     }[];
   };
   availableUsers: AvailableUser[];
+  assignableUsers: AvailableUser[];
   productTypes: { id: string; name: string }[];
   analytics: ProductAnalyticsData | null;
   changelog: ProductChangelogEntry[];
@@ -125,11 +147,70 @@ function getTypeBadgeClass(typeName: string): string {
   return TYPE_COLORS[key] ?? "bg-gray-100 text-gray-700 border-gray-200";
 }
 
+// ── Health badge ────────────────────────────────────────────────────
+
+const HEALTH_STYLES: Record<
+  HealthStatus,
+  { badge: string; icon: React.ReactNode }
+> = {
+  trending: {
+    badge:
+      "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
+    icon: <TrendUp className="h-3 w-3" />,
+  },
+  stable: {
+    badge:
+      "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+    icon: <Pulse className="h-3 w-3" />,
+  },
+  new: {
+    badge:
+      "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800",
+    icon: <Sparkle className="h-3 w-3" />,
+  },
+  declining: {
+    badge:
+      "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800",
+    icon: <TrendDown className="h-3 w-3" />,
+  },
+  at_risk: {
+    badge:
+      "bg-red-100 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800",
+    icon: <Warning className="h-3 w-3" />,
+  },
+  dormant: {
+    badge:
+      "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:border-gray-800",
+    icon: <Moon className="h-3 w-3" />,
+  },
+};
+
+export function HealthBadge({
+  health,
+  compact = false,
+}: {
+  health: ProductHealth;
+  compact?: boolean;
+}) {
+  const style = HEALTH_STYLES[health.status];
+  return (
+    <Badge
+      variant="outline"
+      className={cn("border gap-1", style.badge)}
+      title={health.reasoning}
+    >
+      {style.icon}
+      {compact ? health.label : `Salud: ${health.label}`}
+    </Badge>
+  );
+}
+
 // ── Component ───────────────────────────────────────────────────────
 
 export function ProductDetailClient({
   product,
   availableUsers,
+  assignableUsers,
   productTypes,
   analytics,
   changelog,
@@ -140,11 +221,15 @@ export function ProductDetailClient({
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [saving, setSaving] = useState(false);
 
+  const monthlySales = analytics?.monthlySales ?? [];
+  const health = computeHealth(monthlySales);
+  const forecast = computeForecast(monthlySales);
+
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: "overview", label: "Vista General", icon: <BarChart3 className="h-4 w-4" /> },
-    { id: "distributions", label: "Distribuciones", icon: <PieChart className="h-4 w-4" /> },
-    { id: "history", label: "Historial", icon: <History className="h-4 w-4" /> },
-    { id: "settings", label: "Configuracion", icon: <Settings className="h-4 w-4" /> },
+    { id: "overview", label: "Vista General", icon: <ChartBar className="h-4 w-4" /> },
+    { id: "distributions", label: "Distribuciones", icon: <ChartPie className="h-4 w-4" /> },
+    { id: "history", label: "Historial", icon: <ClockCounterClockwise className="h-4 w-4" /> },
+    { id: "settings", label: "Configuracion", icon: <Gear className="h-4 w-4" /> },
   ];
 
   return (
@@ -215,6 +300,7 @@ export function ProductDetailClient({
                 {product.lifecycle_status === "discontinued" && (
                   <Badge variant="destructive">Descontinuado</Badge>
                 )}
+                <HealthBadge health={health} />
               </div>
               <p className="text-muted-foreground mt-1">
                 {product.partners?.name}
@@ -270,12 +356,18 @@ export function ProductDetailClient({
 
       {/* Tab Content */}
       {activeTab === "overview" && (
-        <OverviewTab analytics={analytics} product={product} />
+        <OverviewTab
+          analytics={analytics}
+          product={product}
+          health={health}
+          forecast={forecast}
+        />
       )}
       {activeTab === "distributions" && (
         <DistributionsTab
           product={product}
           availableUsers={availableUsers}
+          assignableUsers={assignableUsers}
           analytics={analytics}
           affectedReports={affectedReports}
         />
@@ -298,9 +390,13 @@ export function ProductDetailClient({
 function OverviewTab({
   analytics,
   product,
+  health,
+  forecast,
 }: {
   analytics: ProductAnalyticsData | null;
   product: Props["product"];
+  health: ProductHealth;
+  forecast: ProductForecast;
 }) {
   const metrics = analytics?.metrics;
   const monthlySales = analytics?.monthlySales ?? [];
@@ -310,7 +406,7 @@ function OverviewTab({
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <BarChart3 className="h-12 w-12 mb-4 opacity-40" />
+            <ChartBar className="h-12 w-12 mb-4 opacity-40" />
             <p className="font-medium text-lg">Sin datos de ventas</p>
             <p className="text-sm mt-1">
               Este producto aun no aparece en ningun reporte generado.
@@ -338,14 +434,14 @@ function OverviewTab({
       label: "Ingreso Bruto Total",
       value: formatUSD(metrics.totalGrossUsd),
       sublabel: formatMXN(metrics.totalFinalMxn) + " MXN neto",
-      icon: <DollarSign className="h-5 w-5" />,
+      icon: <CurrencyDollar className="h-5 w-5" />,
       color: "text-green-600",
     },
     {
       label: "Promedio Mensual",
       value: formatUSD(metrics.averageMonthlyUsd),
       sublabel: `${metrics.totalMonthsActive} meses activo`,
-      icon: <TrendingUp className="h-5 w-5" />,
+      icon: <TrendUp className="h-5 w-5" />,
       color: "text-blue-600",
     },
     {
@@ -410,9 +506,9 @@ function OverviewTab({
                     )}
                   >
                     {momChange >= 0 ? (
-                      <TrendingUp className="h-3 w-3" />
+                      <TrendUp className="h-3 w-3" />
                     ) : (
-                      <TrendingDown className="h-3 w-3" />
+                      <TrendDown className="h-3 w-3" />
                     )}
                     {momChange >= 0 ? "+" : ""}
                     {momChange.toFixed(1)}% vs mes anterior
@@ -436,6 +532,142 @@ function OverviewTab({
           />
         </CardContent>
       </Card>
+
+      {/* Health + Forecast */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Pulse className="h-4 w-4" />
+              Salud del producto
+            </CardTitle>
+            <CardDescription>
+              Clasificacion automatica segun la tendencia reciente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 mb-3">
+              <HealthBadge health={health} />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {health.reasoning}
+            </p>
+            {(health.momPct !== null || health.trend3moPct !== null) && (
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                {health.momPct !== null && (
+                  <div className="rounded-lg border p-2.5">
+                    <p className="text-muted-foreground">MoM</p>
+                    <p
+                      className={cn(
+                        "font-semibold text-lg",
+                        health.momPct >= 0 ? "text-green-600" : "text-red-600"
+                      )}
+                    >
+                      {health.momPct >= 0 ? "+" : ""}
+                      {health.momPct.toFixed(1)}%
+                    </p>
+                  </div>
+                )}
+                {health.trend3moPct !== null && (
+                  <div className="rounded-lg border p-2.5">
+                    <p className="text-muted-foreground">3m vs 3m previos</p>
+                    <p
+                      className={cn(
+                        "font-semibold text-lg",
+                        health.trend3moPct >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      )}
+                    >
+                      {health.trend3moPct >= 0 ? "+" : ""}
+                      {health.trend3moPct.toFixed(1)}%
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendUp className="h-4 w-4" />
+              Proyeccion de ingresos
+            </CardTitle>
+            <CardDescription>
+              {forecast.model === "decay" && forecast.decayRate !== null
+                ? `Modelo de decaimiento · retencion ${(forecast.decayRate * 100).toFixed(0)}%/mes · confianza ${forecast.confidence === "high" ? "alta" : forecast.confidence === "medium" ? "media" : "baja"}`
+                : forecast.model === "insufficient_data"
+                ? "Sin datos suficientes para proyectar"
+                : "Estimacion basada en ingresos actuales"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {forecast.model === "insufficient_data" ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                Sube al menos un reporte para ver la proyeccion.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="rounded-lg border p-2.5 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      3 meses
+                    </p>
+                    <p className="font-semibold text-base mt-1">
+                      {formatUSD(forecast.next3MonthsUsd)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-2.5 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      6 meses
+                    </p>
+                    <p className="font-semibold text-base mt-1">
+                      {formatUSD(forecast.next6MonthsUsd)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-2.5 text-center">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      12 meses
+                    </p>
+                    <p className="font-semibold text-base mt-1">
+                      {formatUSD(forecast.next12MonthsUsd)}
+                    </p>
+                  </div>
+                </div>
+                <AreaChart
+                  className="h-40"
+                  data={[
+                    ...monthlySales.slice(-6).map((m) => ({
+                      label: m.label,
+                      Historico: m.grossUsd,
+                      Proyeccion: null,
+                    })),
+                    ...forecast.projection.map((p) => ({
+                      label: p.label,
+                      Historico: null,
+                      Proyeccion: p.projectedUsd,
+                    })),
+                  ]}
+                  index="label"
+                  categories={["Historico", "Proyeccion"]}
+                  colors={["blue", "violet"]}
+                  valueFormatter={(v: number) => formatUSD(v)}
+                  showLegend
+                  showAnimation
+                  curveType="monotone"
+                  connectNulls={false}
+                />
+                <p className="text-[11px] text-muted-foreground mt-3">
+                  Proyeccion estimada — los numeros reales pueden variar segun
+                  relanzamientos, promociones y temporada.
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Collaborator earnings summary */}
       {analytics && analytics.collaboratorShares.length > 0 && (
@@ -488,17 +720,22 @@ function OverviewTab({
 function DistributionsTab({
   product,
   availableUsers,
+  assignableUsers,
   analytics,
   affectedReports,
 }: {
   product: Props["product"];
   availableUsers: AvailableUser[];
+  assignableUsers: AvailableUser[];
   analytics: ProductAnalyticsData | null;
   affectedReports: AffectedReportsInfo;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setSaving] = useState(false);
+
+  // Local pool of users added via the dialog during this session (so we don't need a full refresh)
+  const [extraUsers, setExtraUsers] = useState<AvailableUser[]>([]);
 
   const [distributions, setDistributions] = useState<DistEntry[]>(
     (product.product_distributions ?? []).map((d) => ({
@@ -507,6 +744,17 @@ function DistributionsTab({
       percentageShare: Number(d.percentage_share),
     }))
   );
+
+  // Add-collaborator dialog state
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMode, setAddMode] = useState<
+    "assign_existing" | "invite_system" | "create_virtual"
+  >("invite_system");
+  const [addName, setAddName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addExistingId, setAddExistingId] = useState<string>("");
+  const [addSkipInvite, setAddSkipInvite] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
 
   const totalPercentage = distributions.reduce(
     (sum, d) => sum + d.percentageShare,
@@ -517,7 +765,13 @@ function DistributionsTab({
   const remaining = Math.round((100 - roundedTotal) * 100) / 100;
 
   const assignedIds = new Set(distributions.map((d) => d.userId));
-  const unassignedUsers = availableUsers.filter((u) => !assignedIds.has(u.id));
+  const combinedPartnerUsers = [...availableUsers, ...extraUsers];
+  const unassignedUsers = combinedPartnerUsers.filter(
+    (u) => !assignedIds.has(u.id)
+  );
+  const assignableOutsideUsers = assignableUsers.filter(
+    (u) => !extraUsers.some((e) => e.id === u.id)
+  );
 
   const addUser = (user: AvailableUser) => {
     setDistributions((prev) => [
@@ -561,6 +815,67 @@ function DistributionsTab({
     }
   };
 
+  const resetAddForm = () => {
+    setAddName("");
+    setAddEmail("");
+    setAddExistingId("");
+    setAddSkipInvite(false);
+  };
+
+  const handleAddCollaborator = async () => {
+    setAddLoading(true);
+    const result = await addCollaboratorForProduct({
+      mode: addMode,
+      partnerId: product.partner_id,
+      role: "collaborator",
+      userId: addMode === "assign_existing" ? addExistingId : undefined,
+      name:
+        addMode === "create_virtual" || addMode === "invite_system"
+          ? addName
+          : undefined,
+      email:
+        addMode === "invite_system" || addMode === "create_virtual"
+          ? addEmail
+          : undefined,
+      skipInvite: addMode === "invite_system" ? addSkipInvite : undefined,
+    });
+    setAddLoading(false);
+
+    if (!result.success || !result.data) {
+      showToast(result.error ?? "Error al agregar colaborador", "error");
+      return;
+    }
+
+    const newUser: AvailableUser = {
+      id: result.data.id,
+      name: result.data.name,
+      email: result.data.email ?? null,
+      user_type: result.data.user_type,
+    };
+
+    setExtraUsers((prev) => [...prev, newUser]);
+    setDistributions((prev) => [
+      ...prev,
+      {
+        userId: newUser.id,
+        userName: newUser.name,
+        percentageShare: remaining > 0 ? Math.min(remaining, 100) : 0,
+      },
+    ]);
+
+    if (result.data.emailWarning) {
+      showToast(
+        `Colaborador creado, pero no se pudo enviar el email: ${result.data.emailWarning}`,
+        "error"
+      );
+    } else {
+      showToast("Colaborador agregado a la distribucion", "success");
+    }
+
+    resetAddForm();
+    setAddOpen(false);
+  };
+
   // Format month for display
   const fmtMonth = (m: string) => {
     const d = new Date(m + "T00:00:00");
@@ -579,7 +894,7 @@ function DistributionsTab({
       {(hasLockedReports || hasUnlockedReports) && (
         <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
           <div className="flex gap-3">
-            <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <ShieldWarning className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-2">
               <p className="text-sm font-semibold text-amber-800">
                 Importante sobre los cambios de distribucion
@@ -615,7 +930,7 @@ function DistributionsTab({
               {hasUnlockedReports && (
                 <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 p-3">
                   <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                    <WarningCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-blue-800">
                         {affectedReports.unlockedReports.length} reporte
@@ -647,7 +962,7 @@ function DistributionsTab({
               </CardDescription>
             </div>
             <Button onClick={handleSave} disabled={loading || !isValid}>
-              <Save className="mr-2 h-4 w-4" />
+              <FloppyDisk className="mr-2 h-4 w-4" />
               {loading ? "Guardando..." : "Guardar"}
             </Button>
           </div>
@@ -665,9 +980,9 @@ function DistributionsTab({
             )}
           >
             {isValid ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-green-600" />
             ) : (
-              <AlertCircle
+              <WarningCircle
                 className={cn(
                   "h-5 w-5",
                   roundedTotal > 100 ? "text-red-600" : "text-amber-600"
@@ -721,7 +1036,7 @@ function DistributionsTab({
           {distributions.length > 0 && (
             <div className="space-y-3 mb-6">
               {distributions.map((dist) => {
-                const userInfo = availableUsers.find(
+                const userInfo = combinedPartnerUsers.find(
                   (u) => u.id === dist.userId
                 );
                 // Show earned amount if analytics available
@@ -776,7 +1091,7 @@ function DistributionsTab({
                         onClick={() => removeUser(dist.userId)}
                         className="text-destructive hover:text-destructive"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -786,11 +1101,23 @@ function DistributionsTab({
           )}
 
           {/* Add user */}
-          {unassignedUsers.length > 0 && (
-            <div className="space-y-2">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
               <Label className="text-muted-foreground">
                 Agregar colaborador
               </Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAddOpen(true)}
+              >
+                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+                Nuevo colaborador
+              </Button>
+            </div>
+
+            {unassignedUsers.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {unassignedUsers.map((user) => (
                   <Button
@@ -804,24 +1131,198 @@ function DistributionsTab({
                   </Button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {distributions.length === 0 && unassignedUsers.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No hay colaboradores disponibles en este partner.</p>
-              <p className="text-sm mt-1">
-                <Link
-                  href="/collaborators"
-                  className="text-primary hover:underline"
-                >
-                  Crea colaboradores primero
-                </Link>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {distributions.length === 0
+                  ? "Este partner no tiene colaboradores. Agrega uno nuevo o asigna un usuario existente."
+                  : "Todos los colaboradores del partner ya estan en la distribucion."}
               </p>
-            </div>
-          )}
+            )}
+          </div>
         </CardContent>
       </Card>
+
+      {/* Add collaborator dialog */}
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) resetAddForm();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar colaborador a la distribucion</DialogTitle>
+            <DialogDescription>
+              Crea un perfil virtual, invita a un usuario por email, o asigna un
+              usuario existente a este partner.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Mode picker */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  value: "invite_system" as const,
+                  label: "Invitar",
+                  icon: <Envelope className="h-4 w-4" />,
+                },
+                {
+                  value: "create_virtual" as const,
+                  label: "Perfil virtual",
+                  icon: <Ghost className="h-4 w-4" />,
+                },
+                {
+                  value: "assign_existing" as const,
+                  label: "Existente",
+                  icon: <User className="h-4 w-4" />,
+                },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setAddMode(opt.value)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 rounded-lg border p-3 text-xs font-medium transition-colors",
+                    addMode === opt.value
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-border text-muted-foreground hover:border-muted-foreground/40"
+                  )}
+                >
+                  {opt.icon}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {addMode === "invite_system" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="add-name">Nombre</Label>
+                  <Input
+                    id="add-name"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                    placeholder="Nombre completo"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="add-email">Email</Label>
+                  <Input
+                    id="add-email"
+                    type="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    placeholder="email@ejemplo.com"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={addSkipInvite}
+                    onChange={(e) => setAddSkipInvite(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-border accent-primary"
+                  />
+                  No enviar email de invitacion por ahora
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Se creara un usuario del sistema y se enviara un enlace para
+                  establecer su contrasena.
+                </p>
+              </div>
+            )}
+
+            {addMode === "create_virtual" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="add-name-virtual">Nombre</Label>
+                  <Input
+                    id="add-name-virtual"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                    placeholder="Nombre del colaborador"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="add-email-virtual">
+                    Email (opcional)
+                  </Label>
+                  <Input
+                    id="add-email-virtual"
+                    type="email"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    placeholder="Solo para contacto, sin acceso al sistema"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Los perfiles virtuales solo se usan para contabilidad. No
+                  pueden iniciar sesion.
+                </p>
+              </div>
+            )}
+
+            {addMode === "assign_existing" && (
+              <div className="space-y-2">
+                <Label>Usuario</Label>
+                {assignableOutsideUsers.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    No hay otros usuarios disponibles para asignar.
+                  </p>
+                ) : (
+                  <Select
+                    value={addExistingId || undefined}
+                    onValueChange={setAddExistingId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona un usuario..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableOutsideUsers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                          {u.email ? ` — ${u.email}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  El usuario sera asignado al partner{" "}
+                  <span className="font-medium">
+                    {product.partners?.name}
+                  </span>{" "}
+                  y agregado a la distribucion.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAddOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                addLoading ||
+                (addMode === "invite_system" &&
+                  (!addName.trim() || !addEmail.trim())) ||
+                (addMode === "create_virtual" && !addName.trim()) ||
+                (addMode === "assign_existing" && !addExistingId)
+              }
+              onClick={handleAddCollaborator}
+            >
+              {addLoading ? "Agregando..." : "Agregar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -916,9 +1417,9 @@ function HistoryTab({
                               )}
                             >
                               {change >= 0 ? (
-                                <TrendingUp className="h-3 w-3" />
+                                <TrendUp className="h-3 w-3" />
                               ) : (
-                                <TrendingDown className="h-3 w-3" />
+                                <TrendDown className="h-3 w-3" />
                               )}
                               {change >= 0 ? "+" : ""}
                               {change.toFixed(1)}%
@@ -968,7 +1469,7 @@ function HistoryTab({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <History className="h-5 w-5" />
+              <ClockCounterClockwise className="h-5 w-5" />
               Log de Cambios
             </CardTitle>
             <CardDescription>
@@ -1155,7 +1656,7 @@ function SettingsTab({
             </div>
 
             <Button type="submit" disabled={loading}>
-              <Save className="mr-2 h-4 w-4" />
+              <FloppyDisk className="mr-2 h-4 w-4" />
               {loading ? "Guardando..." : "Guardar Cambios"}
             </Button>
           </form>

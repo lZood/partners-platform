@@ -52,6 +52,18 @@ export default async function ProductDetailPage({ params }: Props) {
     .map((row: any) => row.users)
     .filter((u: any) => u && u.is_active);
 
+  // Get system users NOT in this partner (so they can be added to the distribution directly)
+  const partnerUserIds = new Set<string>(availableUsers.map((u: any) => u.id));
+  const { data: allActiveUsers } = await supabase
+    .from("users")
+    .select("id, name, email, user_type, is_active")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  const assignableUsers = (allActiveUsers ?? []).filter(
+    (u: any) => !partnerUserIds.has(u.id)
+  );
+
   // Get product types for the settings tab
   const { data: productTypes } = await supabase
     .from("product_types")
@@ -76,6 +88,7 @@ export default async function ProductDetailPage({ params }: Props) {
     <ProductDetailClient
       product={product as any}
       availableUsers={availableUsers}
+      assignableUsers={assignableUsers}
       productTypes={productTypes ?? []}
       analytics={analytics}
       changelog={changelog}

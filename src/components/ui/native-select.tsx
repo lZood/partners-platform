@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown } from "lucide-react";
+import { CaretDown } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 
 export interface NativeSelectProps
@@ -26,7 +26,7 @@ const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
         >
           {children}
         </select>
-        <ChevronDown
+        <CaretDown
           className={cn(
             "pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground",
             variant === "default" ? "h-4 w-4" : "h-3 w-3"

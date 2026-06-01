@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import gsap from "gsap";
 import {
-  Building2,
+  Buildings,
   Plus,
   Pencil,
   ToggleLeft,
@@ -13,9 +13,9 @@ import {
   Package,
   Receipt,
   FileText,
-  ChevronRight,
+  CaretRight,
   Eye,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -216,7 +216,7 @@ export function PartnersClient({ initialPartners }: Props) {
           <CardContent className="pt-6">
             <div className="flex h-[300px] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
               <div className="text-center">
-                <Building2 className="mx-auto h-10 w-10 mb-3 opacity-40" />
+                <Buildings className="mx-auto h-10 w-10 mb-3 opacity-40" />
                 <p className="font-medium">No hay partners registrados</p>
                 <p className="text-sm mt-1">
                   Crea el primer partner para empezar.
@@ -252,7 +252,7 @@ export function PartnersClient({ initialPartners }: Props) {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <Building2 className="h-5 w-5 text-primary" />
+                        <Buildings className="h-5 w-5 text-primary" />
                       )}
                     </div>
                     <div>
@@ -338,7 +338,7 @@ export function PartnersClient({ initialPartners }: Props) {
                 {/* View detail hint */}
                 <div className="flex items-center justify-end mt-3 text-xs text-muted-foreground group-hover:text-primary transition-colors">
                   Ver detalles
-                  <ChevronRight className="h-3 w-3 ml-0.5" />
+                  <CaretRight className="h-3 w-3 ml-0.5" />
                 </div>
               </CardContent>
             </Card>

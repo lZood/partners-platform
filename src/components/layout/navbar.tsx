@@ -5,15 +5,19 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SearchModal } from "@/components/layout/search-modal";
 import {
-  Search,
+  PartnerSelector,
+  type Partner as SelectorPartner,
+} from "@/components/layout/partner-selector";
+import {
+  MagnifyingGlass,
   Bell,
   FileText,
   CreditCard,
   Wallet,
   UserPlus,
-  DollarSign,
-  CheckCheck,
-} from "lucide-react";
+  CurrencyDollar,
+  Checks,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   getNotifications,
@@ -26,9 +30,11 @@ import { useToast } from "@/components/shared/toast-provider";
 interface NavbarProps {
   userName?: string;
   userRole?: string;
-  partnerName?: string;
   userId?: string;
   unreadCount?: number;
+  partners?: SelectorPartner[];
+  activePartnerId?: string;
+  canSwitchPartner?: boolean;
 }
 
 const notifIcons: Record<string, typeof Bell> = {
@@ -36,7 +42,7 @@ const notifIcons: Record<string, typeof Bell> = {
   payment_registered: CreditCard,
   payment_received: Wallet,
   user_assigned: UserPlus,
-  concept_added: DollarSign,
+  concept_added: CurrencyDollar,
 };
 
 const notifColors: Record<string, string> = {
@@ -50,9 +56,11 @@ const notifColors: Record<string, string> = {
 export function Navbar({
   userName = "Admin",
   userRole = "admin",
-  partnerName = "Partner",
   userId = "",
   unreadCount = 0,
+  partners = [],
+  activePartnerId = "",
+  canSwitchPartner = false,
 }: NavbarProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -187,17 +195,41 @@ export function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-end bg-background px-4 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/80 backdrop-blur px-4 lg:px-6">
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
 
-      <div className="flex items-center gap-1">
+      {/* Partner switcher — top-left (after the mobile hamburger) */}
+      <div className="flex min-w-0 items-center lg:pl-0 pl-12">
+        {partners.length > 0 && activePartnerId && (
+          <PartnerSelector
+            partners={partners}
+            currentPartnerId={activePartnerId}
+            canSwitch={canSwitchPartner}
+          />
+        )}
+      </div>
+
+      {/* Search trigger — looks like an input, opens the command modal */}
+      <button
+        onClick={() => setSearchOpen(true)}
+        className="hidden md:flex flex-1 max-w-sm items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted"
+      >
+        <MagnifyingGlass className="h-[16px] w-[16px]" />
+        <span className="flex-1 truncate">Buscar...</span>
+        <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border bg-background px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground/80">
+          ⌘K
+        </kbd>
+      </button>
+
+      <div className="ml-auto flex items-center gap-1">
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 text-muted-foreground"
+          className="md:hidden h-9 w-9 text-muted-foreground"
           onClick={() => setSearchOpen(true)}
+          aria-label="Buscar"
         >
-          <Search className="h-[18px] w-[18px]" />
+          <MagnifyingGlass className="h-[18px] w-[18px]" />
         </Button>
 
         {/* Notifications bell */}
@@ -234,7 +266,7 @@ export function Navbar({
                       onClick={handleMarkAllRead}
                       className="flex items-center gap-1 text-xs text-primary hover:underline"
                     >
-                      <CheckCheck className="h-3 w-3" />
+                      <Checks className="h-3 w-3" />
                       Marcar todas leidas
                     </button>
                   )}

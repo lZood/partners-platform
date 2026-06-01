@@ -5,23 +5,23 @@ import { useRouter } from "next/navigation";
 import {
   Upload,
   FileText,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle,
+  CheckCircle,
+  WarningCircle,
+  Warning,
   X,
-  Loader2,
+  CircleNotch,
   Package,
   Hash,
-  ArrowUpDown,
+  ArrowsDownUp,
   Plus,
   Check,
-  RefreshCw,
-  ShieldAlert,
+  ArrowsClockwise,
+  ShieldWarning,
   Lock,
   Clock,
-  ArrowRightLeft,
+  ArrowsLeftRight,
   ArrowLeft,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,19 +62,53 @@ import {
 interface Props {
   partners: { id: string; name: string }[];
   productTypes: { id: string; name: string }[];
+  defaultPartnerId?: string;
 }
 
 type SortField = "productName" | "totalUsd" | "transactionCount";
 type SortDir = "asc" | "desc";
 
-export function UploadClient({ partners, productTypes }: Props) {
+const MONTHS = [
+  { value: "01", label: "Enero" },
+  { value: "02", label: "Febrero" },
+  { value: "03", label: "Marzo" },
+  { value: "04", label: "Abril" },
+  { value: "05", label: "Mayo" },
+  { value: "06", label: "Junio" },
+  { value: "07", label: "Julio" },
+  { value: "08", label: "Agosto" },
+  { value: "09", label: "Septiembre" },
+  { value: "10", label: "Octubre" },
+  { value: "11", label: "Noviembre" },
+  { value: "12", label: "Diciembre" },
+] as const;
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 4 }, (_, i) => String(CURRENT_YEAR - 2 + i));
+
+export function UploadClient({
+  partners,
+  productTypes,
+  defaultPartnerId,
+}: Props) {
   const router = useRouter();
   const { showToast } = useToast();
 
   // Step 1: Config
-  const [partnerId, setPartnerId] = useState("");
-  const [month, setMonth] = useState("");
+  const [partnerId, setPartnerId] = useState(defaultPartnerId ?? "");
+  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedYear, setSelectedYear] = useState(String(new Date().getFullYear()));
   const [exchangeRate, setExchangeRate] = useState("");
+
+  const month = selectedMonth && selectedYear ? `${selectedYear}-${selectedMonth}` : "";
+
+  const handleMonthFieldChange = (field: "month" | "year", val: string) => {
+    if (field === "month") setSelectedMonth(val);
+    else setSelectedYear(val);
+    setExistingReport(null);
+    setConflictChecked(false);
+    setReplaceConfirmed(false);
+  };
 
   // Step 2: File
   const [file, setFile] = useState<File | null>(null);
@@ -306,7 +340,7 @@ export function UploadClient({ partners, productTypes }: Props) {
     allMatched && conflictChecked && (!existingReport || replaceConfirmed);
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div>
         <Link
           href="/reports"
@@ -362,17 +396,35 @@ export function UploadClient({ partners, productTypes }: Props) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Mes / Ano</Label>
-              <Input
-                type="month"
-                value={month}
-                onChange={(e) => {
-                  setMonth(e.target.value);
-                  setExistingReport(null);
-                  setConflictChecked(false);
-                  setReplaceConfirmed(false);
-                }}
-              />
+              <Label>Mes / Año</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Select
+                  value={selectedMonth || undefined}
+                  onValueChange={(val) => handleMonthFieldChange("month", val)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Mes" /></SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={selectedYear || undefined}
+                  onValueChange={(val) => handleMonthFieldChange("year", val)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Año" /></SelectTrigger>
+                  <SelectContent>
+                    {YEARS.map((y) => (
+                      <SelectItem key={y} value={y}>
+                        {y}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Tipo de cambio (USD → MXN)</Label>
@@ -388,7 +440,7 @@ export function UploadClient({ partners, productTypes }: Props) {
           </div>
           {configValid && (
             <p className="mt-3 text-sm text-green-600 flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle className="h-4 w-4" />
               Configuracion lista
             </p>
           )}
@@ -461,7 +513,7 @@ export function UploadClient({ partners, productTypes }: Props) {
           {parseErrors.length > 0 && (
             <div className="mt-4 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700 p-3">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-1 flex items-center gap-1">
-                <AlertCircle className="h-4 w-4" />
+                <WarningCircle className="h-4 w-4" />
                 Advertencias ({parseErrors.length}):
               </p>
               {parseErrors.slice(0, 5).map((err, i) => (
@@ -500,7 +552,7 @@ export function UploadClient({ partners, productTypes }: Props) {
               >
                 {matchLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                     Verificando...
                   </>
                 ) : matchResults.length > 0 ? (
@@ -540,7 +592,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                       <span className="inline-flex items-center gap-1">
                         Producto
                         {sortField === "productName" && (
-                          <ArrowUpDown className="h-3 w-3" />
+                          <ArrowsDownUp className="h-3 w-3" />
                         )}
                       </span>
                     </th>
@@ -559,7 +611,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                       <span className="inline-flex items-center gap-1 justify-end">
                         Ventas
                         {sortField === "transactionCount" && (
-                          <ArrowUpDown className="h-3 w-3" />
+                          <ArrowsDownUp className="h-3 w-3" />
                         )}
                       </span>
                     </th>
@@ -570,7 +622,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                       <span className="inline-flex items-center gap-1 justify-end">
                         Total USD
                         {sortField === "totalUsd" && (
-                          <ArrowUpDown className="h-3 w-3" />
+                          <ArrowsDownUp className="h-3 w-3" />
                         )}
                       </span>
                     </th>
@@ -618,7 +670,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                                 variant="secondary"
                                 className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs gap-1"
                               >
-                                <AlertTriangle className="h-3 w-3" />
+                                <Warning className="h-3 w-3" />
                                 No registrado
                               </Badge>
                             )}
@@ -736,7 +788,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                   >
                     {registerLoading ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                         Registrando...
                       </>
                     ) : (
@@ -804,12 +856,12 @@ export function UploadClient({ partners, productTypes }: Props) {
                 >
                   {conflictLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                       Verificando...
                     </>
                   ) : (
                     <>
-                      <ShieldAlert className="mr-2 h-4 w-4" />
+                      <ShieldWarning className="mr-2 h-4 w-4" />
                       Verificar Duplicados
                     </>
                   )}
@@ -822,7 +874,7 @@ export function UploadClient({ partners, productTypes }: Props) {
           {conflictChecked && !existingReport && (
             <CardContent>
               <div className="flex items-center gap-2 text-green-700">
-                <CheckCircle2 className="h-5 w-5" />
+                <CheckCircle className="h-5 w-5" />
                 <p className="text-sm font-medium">
                   No se encontro un reporte previo para{" "}
                   <span className="capitalize">{formatMonth(`${month}-01`)}</span>
@@ -878,7 +930,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                   {/* Warning banner */}
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                      <Warning className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
                       <div>
                         <p className="font-medium text-amber-800 dark:text-amber-200">
                           Ya existe un reporte para{" "}
@@ -1003,7 +1055,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                     {/* New */}
                     <div className="rounded-md border border-primary/30 p-4 bg-primary/5">
                       <div className="flex items-center gap-2 mb-3">
-                        <ArrowRightLeft className="h-4 w-4 text-primary" />
+                        <ArrowsLeftRight className="h-4 w-4 text-primary" />
                         <p className="font-medium text-sm">
                           Nuevo Reporte (CSV actual)
                         </p>
@@ -1097,7 +1149,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                         variant="destructive"
                         onClick={() => setReplaceConfirmed(true)}
                       >
-                        <RefreshCw className="mr-2 h-4 w-4" />
+                        <ArrowsClockwise className="mr-2 h-4 w-4" />
                         Reemplazar Reporte Anterior
                       </Button>
                       <Button
@@ -1113,7 +1165,7 @@ export function UploadClient({ partners, productTypes }: Props) {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-amber-700 pt-2">
-                      <CheckCircle2 className="h-4 w-4" />
+                      <CheckCircle className="h-4 w-4" />
                       <p className="text-sm font-medium">
                         Confirmado: el reporte anterior sera reemplazado al
                         generar.
@@ -1155,14 +1207,14 @@ export function UploadClient({ partners, productTypes }: Props) {
               >
                 {processing ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                     {existingReport
                       ? "Reemplazando..."
                       : "Generando Reporte..."}
                   </>
                 ) : existingReport ? (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
+                    <ArrowsClockwise className="mr-2 h-4 w-4" />
                     Reemplazar y Generar Reporte
                   </>
                 ) : (
@@ -1179,7 +1231,7 @@ export function UploadClient({ partners, productTypes }: Props) {
         <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-green-800">
-              <CheckCircle2 className="h-5 w-5" />
+              <CheckCircle className="h-5 w-5" />
               {existingReport
                 ? "Reporte Reemplazado Exitosamente"
                 : "Reporte Generado Exitosamente"}

@@ -6,17 +6,17 @@ import gsap from "gsap";
 import {
   Users,
   Plus,
-  Search,
+  MagnifyingGlass,
   User,
   Ghost,
-  AlertCircle,
-  ChevronRight,
+  WarningCircle,
+  CaretRight,
   Download,
   Clock,
   CheckSquare,
   UserCheck,
-  UserX,
-} from "lucide-react";
+  UserMinus,
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -46,6 +46,8 @@ import {
   toggleCollaboratorActive,
 } from "@/actions/users";
 import { useToast } from "@/components/shared/toast-provider";
+import { ViewToggle } from "@/components/shared/view-toggle";
+import { useViewMode } from "@/hooks/use-view-mode";
 import { displayName } from "@/lib/utils";
 
 interface UserPartnerRole {
@@ -120,11 +122,14 @@ export function CollaboratorsClient({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  // View mode (list/grid persisted in localStorage)
+  const [viewMode, setViewMode] = useViewMode("collaborators", "list");
+
   useEffect(() => {
     if (!containerRef.current) return;
     const cards = containerRef.current.querySelectorAll("[data-animate-card]");
     gsap.fromTo(cards, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, stagger: 0.04, ease: "power2.out" });
-  }, []);
+  }, [viewMode]);
 
   const filtered = useMemo(() => {
     let list = [...initialUsers];
@@ -338,7 +343,7 @@ export function CollaboratorsClient({
                 onClick={() => handleBulkToggle(false)}
                 disabled={bulkLoading}
               >
-                <UserX className="mr-1.5 h-3.5 w-3.5 text-destructive" />
+                <UserMinus className="mr-1.5 h-3.5 w-3.5 text-destructive" />
                 Desactivar
               </Button>
             </div>
@@ -350,12 +355,12 @@ export function CollaboratorsClient({
       {unassignedUsers.length > 0 && (
         <Card data-animate-card className="border-0 shadow-sm bg-amber-50 dark:bg-amber-950/20 cursor-pointer" onClick={() => setAssignOpen(true)}>
           <CardContent className="flex items-center gap-3 p-4">
-            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+            <WarningCircle className="h-5 w-5 text-amber-600 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-200">{unassignedUsers.length} usuario(s) sin asignar</p>
               <p className="text-xs text-amber-600 dark:text-amber-400">Click para asignarlos a un partner</p>
             </div>
-            <ChevronRight className="h-4 w-4 text-amber-600" />
+            <CaretRight className="h-4 w-4 text-amber-600" />
           </CardContent>
         </Card>
       )}
@@ -429,7 +434,7 @@ export function CollaboratorsClient({
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="pl-9 w-48 h-9 bg-card border-0 shadow-sm" />
         </div>
         {partners.length > 1 && (
@@ -480,6 +485,7 @@ export function CollaboratorsClient({
           </Select>
         </div>
         <span className="text-xs text-muted-foreground ml-auto">{filtered.length} de {initialUsers.length}</span>
+        <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
       {/* Collaborator cards */}
@@ -492,6 +498,70 @@ export function CollaboratorsClient({
             </div>
           </CardContent>
         </Card>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {filtered.map((user) => {
+            const statusColor = user.is_active ? "bg-green-500" : user.user_type === "system_user" ? "bg-amber-500" : "bg-gray-300";
+            const lastAct = timeAgo(user.lastActivity);
+            const primaryRole = user.user_partner_roles[0];
+
+            return (
+              <Card
+                key={user.id}
+                data-animate-card
+                className="border-0 shadow-sm transition-card hover-lift cursor-pointer group relative overflow-hidden"
+                onClick={() => {
+                  if (selectionMode) {
+                    toggleSelect(user.id);
+                  } else {
+                    router.push(`/collaborators/${user.id}`);
+                  }
+                }}
+              >
+                <CardContent className="flex flex-col items-center text-center p-4">
+                  {selectionMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(user.id)}
+                      onChange={() => toggleSelect(user.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-2 left-2 h-4 w-4 rounded border-border accent-primary"
+                    />
+                  )}
+                  <div className="relative mb-3">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary text-lg font-bold overflow-hidden">
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt={user.name} className="h-full w-full object-cover" />
+                      ) : user.user_type === "system_user" ? (
+                        <User className="h-7 w-7" />
+                      ) : (
+                        <Ghost className="h-7 w-7 text-muted-foreground" />
+                      )}
+                    </div>
+                    <span className={`absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card ${statusColor}`} />
+                  </div>
+                  <p className="font-medium text-sm truncate w-full">{displayName(user.name)}</p>
+                  <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
+                    {user.email ?? "Sin email"}
+                  </p>
+                  {primaryRole && (
+                    <Badge variant="outline" className="text-[10px] mt-2 max-w-full truncate">
+                      {roleLabels[primaryRole.role] ?? primaryRole.role}
+                    </Badge>
+                  )}
+                  {user.user_partner_roles.length > 1 && (
+                    <p className="text-[10px] text-muted-foreground mt-1">+{user.user_partner_roles.length - 1} partner(s)</p>
+                  )}
+                  {lastAct && (
+                    <p className="text-[10px] text-muted-foreground mt-1 inline-flex items-center gap-0.5">
+                      <Clock className="h-2.5 w-2.5" /> {lastAct}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       ) : (
         <div className="space-y-2">
           {filtered.map((user) => {
@@ -557,7 +627,7 @@ export function CollaboratorsClient({
                   >
                     {user.user_type === "system_user" ? "Sistema" : "Virtual"}
                   </Badge>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <CaretRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </CardContent>
               </Card>
             );

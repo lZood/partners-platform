@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { FileText, Lock, Unlock, Eye, Upload } from "lucide-react";
+import { FileText, Lock, LockOpen, Eye, Upload } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatUSD, formatMXN, formatMonth } from "@/lib/utils";
+import { getActivePartnerContext } from "@/lib/active-partner";
 import { ReportFilters } from "./report-filters";
 
 interface PageProps {
@@ -22,44 +23,26 @@ interface PageProps {
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
+  const ctx = await getActivePartnerContext();
+  if (!ctx) redirect("/login");
+
   const supabase = createServerSupabaseClient();
   const params = await searchParams;
-
-  // Get current user
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Get user role
-  const { data: appUser } = await supabase
-    .from("users")
-    .select(
-      `
-      id,
-      user_partner_roles (role)
-    `
-    )
-    .eq("auth_user_id", user.id)
-    .single();
-
-  const userRole = (appUser?.user_partner_roles as any)?.[0]?.role ?? "collaborator";
-  const userId = appUser?.id;
+  const userRole = ctx.role;
+  const userId = ctx.appUserId;
 
   let allReports = null;
 
   // For collaborators, get only reports that contain their line items
   if (userRole === "collaborator" && userId) {
-    // Get report IDs that contain this user's line items
     const { data: userReports } = await supabase
       .from("report_line_items")
       .select("monthly_report_id")
       .eq("user_id", userId);
 
-    const reportIds = [...new Set((userReports ?? []).map((r: any) => r.monthly_report_id))];
+    const reportIds = [
+      ...new Set((userReports ?? []).map((r: any) => r.monthly_report_id)),
+    ];
 
     if (reportIds.length > 0) {
       const { data } = await supabase
@@ -84,8 +67,8 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       allReports = [];
     }
   } else {
-    // Admins and super_admins see all reports
-    const { data } = await supabase
+    // Admins and super_admins: scope to the currently active partner.
+    let q = supabase
       .from("monthly_reports")
       .select(
         `
@@ -101,6 +84,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       `
       )
       .order("report_month", { ascending: false });
+
+    if (ctx.activePartnerId) {
+      q = q.eq("partner_id", ctx.activePartnerId);
+    } else if (ctx.accessiblePartnerIds.length > 0) {
+      q = q.in("partner_id", ctx.accessiblePartnerIds);
+    }
+
+    const { data } = await q;
     allReports = data;
   }
 
@@ -261,7 +252,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
                           </Badge>
                         ) : (
                           <Badge variant="warning" className="gap-1">
-                            <Unlock className="h-3 w-3" />
+                            <LockOpen className="h-3 w-3" />
                             Abierto
                           </Badge>
                         )}

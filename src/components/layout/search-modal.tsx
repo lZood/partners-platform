@@ -3,15 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Search,
+  MagnifyingGlass,
   Users,
   Package,
-  Building2,
+  Buildings,
   FileText,
   X,
-  Loader2,
+  CircleNotch,
   Command,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { globalSearch, type SearchResult, type SearchResults } from "@/actions/search";
 import { getInitials } from "@/lib/utils";
 
@@ -23,7 +23,7 @@ interface Props {
 const categoryConfig = {
   collaborator: { label: "Colaboradores", icon: Users, color: "text-blue-500" },
   product: { label: "Productos", icon: Package, color: "text-violet-500" },
-  partner: { label: "Partners", icon: Building2, color: "text-amber-500" },
+  partner: { label: "Partners", icon: Buildings, color: "text-amber-500" },
   report: { label: "Reportes", icon: FileText, color: "text-emerald-500" },
 };
 
@@ -178,7 +178,7 @@ export function SearchModal({ open, onClose }: Props) {
         <div className="mx-4 overflow-hidden rounded-xl border bg-card shadow-2xl">
           {/* Search input */}
           <div className="flex items-center gap-3 border-b px-4">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <MagnifyingGlass className="h-4 w-4 text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
               type="text"
@@ -189,7 +189,7 @@ export function SearchModal({ open, onClose }: Props) {
               className="flex-1 bg-transparent py-3.5 text-sm outline-none placeholder:text-muted-foreground"
             />
             {loading && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <CircleNotch className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
             <button
               onClick={onClose}
@@ -211,12 +211,12 @@ export function SearchModal({ open, onClose }: Props) {
               </div>
             ) : loading ? (
               <div className="p-8 text-center text-muted-foreground">
-                <Loader2 className="mx-auto h-6 w-6 animate-spin mb-2" />
+                <CircleNotch className="mx-auto h-6 w-6 animate-spin mb-2" />
                 <p className="text-sm">Buscando...</p>
               </div>
             ) : totalResults === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
-                <Search className="mx-auto h-8 w-8 mb-2 opacity-30" />
+                <MagnifyingGlass className="mx-auto h-8 w-8 mb-2 opacity-30" />
                 <p className="text-sm">
                   Sin resultados para "{query}"
                 </p>

@@ -5,7 +5,23 @@
       "mcp__5ea9d507-29f1-486f-9d5a-29127a9d820e__list_tables",
       "mcp__5ea9d507-29f1-486f-9d5a-29127a9d820e__get_advisors",
       "mcp__5ea9d507-29f1-486f-9d5a-29127a9d820e__apply_migration",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "WebFetch(domain:phosphoricons.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl -s \"https://api.github.com/repos/phosphor-icons/core/contents/assets/regular\")",
+      "Bash(curl -s \"https://api.github.com/repos/phosphor-icons/core/contents/assets/regular?per_page=2000&page=2\")",
+      "Bash(curl -s \"https://api.github.com/repos/phosphor-icons/core/contents/assets/regular?per_page=2000&page=3\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/phosphor-icons/core/main/META.json\")",
+      "Bash(curl -s \"https://api.github.com/repos/phosphor-icons/core/git/trees/main?recursive=1\")",
+      "Bash(powershell -Command \"\\(Get-Content 'src/app/\\(dashboard\\)/products/[productId]/product-detail-client.tsx' -Raw\\) -replace '<TrendingUp ', '<TrendUp ' -replace '<TrendingDown ', '<TrendDown ' -replace '<Sparkles ', '<Sparkle ' -replace '<AlertTriangle ', '<Warning ' -replace '<BarChart3 ', '<ChartBar ' -replace '<PieChart ', '<ChartPie ' -replace '<History ', '<ClockCounterClockwise ' -replace '<Settings ', '<Gear ' -replace '<DollarSign ', '<CurrencyDollar ' -replace '<ShieldAlert ', '<ShieldWarning ' -replace '<AlertCircle', '<WarningCircle' -replace '<Save ', '<FloppyDisk ' -replace '<CheckCircle2 ', '<CheckCircle ' -replace '<Trash2 ', '<Trash ' -replace '<Mail ', '<Envelope ' | Set-Content 'src/app/\\(dashboard\\)/products/[productId]/product-detail-client.tsx' -NoNewline\")",
+      "mcp__5ea9d507-29f1-486f-9d5a-29127a9d820e__execute_sql",
+      "Bash(node -e \"const m=require\\('@phosphor-icons/react'\\); console.log\\('FilePdf:', !!m.FilePdf, 'FileXls:', !!m.FileXls, 'CurrencyDollar:', !!m.CurrencyDollar\\)\")",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"grep -rlo\")",
+      "Bash(rtk tsc *)",
+      "Bash(npx tsc *)",
+      "Bash(rtk next *)",
+      "Bash(rtk git *)"
     ]
   }
 }

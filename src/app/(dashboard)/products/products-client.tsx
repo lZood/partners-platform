@@ -10,22 +10,22 @@ import {
   Pencil,
   ToggleLeft,
   ToggleRight,
-  AlertCircle,
-  CheckCircle2,
+  WarningCircle,
+  CheckCircle,
   Eye,
-  Search,
-  ArrowUpDown,
+  MagnifyingGlass,
+  ArrowsDownUp,
   ArrowUp,
   ArrowDown,
-  Filter,
+  Funnel,
   X,
-  Settings2,
+  Sliders,
   Columns,
-  ChevronUp,
-  ChevronDown,
+  CaretUp,
+  CaretDown,
   Download,
   CheckSquare,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -58,8 +58,15 @@ import {
   toggleProductActive,
 } from "@/actions/products";
 import { useToast } from "@/components/shared/toast-provider";
+import { ViewToggle } from "@/components/shared/view-toggle";
+import { useViewMode } from "@/hooks/use-view-mode";
 import { cn, formatPercentage, formatUSD, displayName } from "@/lib/utils";
 import type { ProductRevenueSummary } from "@/actions/product-analytics";
+import {
+  computeHealthFromTrend,
+  type ProductHealth,
+  type HealthStatus,
+} from "@/lib/analytics/product-health";
 
 // ── Type badge colors ───────────────────────────────────────────────
 
@@ -85,6 +92,28 @@ const LIFECYCLE_LABELS: Record<string, { label: string; variant: "secondary" | "
 };
 
 // ── Mini sparkline component ────────────────────────────────────────
+
+const HEALTH_DOT_STYLE: Record<HealthStatus, { bg: string; label: string }> = {
+  trending: { bg: "bg-emerald-500", label: "En crecimiento" },
+  stable: { bg: "bg-blue-500", label: "Estable" },
+  new: { bg: "bg-sky-500", label: "Nuevo" },
+  declining: { bg: "bg-orange-500", label: "En declive" },
+  at_risk: { bg: "bg-red-500", label: "En riesgo" },
+  dormant: { bg: "bg-gray-400", label: "Dormido" },
+};
+
+function HealthDot({ health }: { health: ProductHealth }) {
+  const style = HEALTH_DOT_STYLE[health.status];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      title={health.reasoning}
+    >
+      <span className={cn("h-2 w-2 rounded-full", style.bg)} />
+      <span className="text-xs">{style.label}</span>
+    </span>
+  );
+}
 
 function MiniSparkline({ data }: { data: number[] }) {
   if (!data || data.length === 0 || data.every((v) => v === 0)) {
@@ -118,6 +147,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: "type", label: "Tipo", adminOnly: false, defaultVisible: true },
   { key: "revenue", label: "Ingreso Total", adminOnly: true, defaultVisible: true },
   { key: "trend", label: "Tendencia", adminOnly: true, defaultVisible: true },
+  { key: "health", label: "Salud", adminOnly: true, defaultVisible: true },
   { key: "distribution", label: "Distribucion", adminOnly: true, defaultVisible: true },
   { key: "lifecycle", label: "Lifecycle", adminOnly: true, defaultVisible: false },
   { key: "status", label: "Estado", adminOnly: true, defaultVisible: true },
@@ -140,6 +170,11 @@ interface Props {
 
 type SortField = "name" | "type" | "revenue" | "distribution" | "status";
 type SortDir = "asc" | "desc";
+
+function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (sortField !== field) return <ArrowsDownUp className="h-3 w-3 opacity-40" />;
+  return sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
+}
 
 // ── Component ───────────────────────────────────────────────────────
 
@@ -175,6 +210,9 @@ export function ProductsClient({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // View mode (list/grid persisted in localStorage)
+  const [viewMode, setViewMode] = useViewMode("products", "list");
 
   // Column visibility (persisted in localStorage, hydration-safe)
   const defaultCols = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
@@ -246,11 +284,6 @@ export function ProductsClient({
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortField(field); setSortDir(field === "revenue" ? "desc" : "asc"); }
-  };
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-40" />;
-    return sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
   };
 
   const clearFilters = () => { setSearch(""); setFilterPartner(""); setFilterType(""); setFilterStatus(""); setFilterDistribution(""); };
@@ -446,7 +479,7 @@ export function ProductsClient({
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="pl-9 w-48 h-9 bg-card border-0 shadow-sm" />
         </div>
 
@@ -548,6 +581,7 @@ export function ProductsClient({
         <span className="text-xs text-muted-foreground ml-auto">
           {filtered.length} de {initialProducts.length}
         </span>
+        <ViewToggle value={viewMode} onChange={setViewMode} />
       </div>
 
       {/* Bulk action bar */}
@@ -582,8 +616,108 @@ export function ProductsClient({
         </Card>
       )}
 
-      {/* Mobile card view */}
-      <div className="space-y-2 md:hidden">
+      {viewMode === "grid" && (
+        <>
+          {filtered.length === 0 ? (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="flex h-[300px] items-center justify-center text-muted-foreground">
+                <div className="text-center">
+                  <Package className="mx-auto h-10 w-10 mb-3 opacity-40" />
+                  <p className="font-medium">{hasFilters ? "Sin resultados" : "Sin productos"}</p>
+                  {hasFilters && (
+                    <Button variant="link" size="sm" onClick={clearFilters} className="mt-2">Limpiar filtros</Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {filtered.map((product: any) => {
+                const revenue = revenueSummaries[product.id];
+                const lifecycle = LIFECYCLE_LABELS[product.lifecycle_status] ?? LIFECYCLE_LABELS.active;
+                const myShare = !isAdmin ? getMyShare(product) : 0;
+                const myEarnings = !isAdmin && revenue ? revenue.totalGrossUsd * (myShare / 100) : 0;
+                return (
+                  <Card
+                    key={product.id}
+                    className="border-0 shadow-sm transition-card hover-lift cursor-pointer group relative overflow-hidden"
+                    onClick={() => {
+                      if (selectionMode) { toggleSelect(product.id); } else { router.push(`/products/${product.id}`); }
+                    }}
+                  >
+                    {selectionMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(product.id)}
+                        onChange={() => toggleSelect(product.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-2 left-2 z-10 h-4 w-4 rounded border-border accent-primary"
+                      />
+                    )}
+                    <div className="aspect-video bg-muted relative overflow-hidden">
+                      {product.image_url ? (
+                        <img src={product.image_url} alt={product.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <Package className="h-10 w-10 text-muted-foreground/40" />
+                        </div>
+                      )}
+                      {product.lifecycle_status !== "active" && (
+                        <Badge variant={lifecycle.variant} className="absolute top-2 right-2 text-[10px]">{lifecycle.label}</Badge>
+                      )}
+                      {isAdmin && !product.is_active && (
+                        <Badge variant="secondary" className="absolute bottom-2 right-2 text-[10px]">Inactivo</Badge>
+                      )}
+                    </div>
+                    <CardContent className="p-3 space-y-2">
+                      <div>
+                        <p className="font-medium text-sm truncate leading-tight">{product.name}</p>
+                        {product.partners?.name && (
+                          <p className="text-[10px] text-muted-foreground truncate">{product.partners.name}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline" className={cn("border text-[10px] truncate max-w-[60%]", getTypeBadgeClass(product.product_types?.name ?? ""))}>
+                          {product.product_types?.name ?? "—"}
+                        </Badge>
+                        {isAdmin ? (
+                          revenue && revenue.totalGrossUsd > 0 ? (
+                            <span className="text-xs font-mono font-medium tabular-nums">{formatUSD(revenue.totalGrossUsd)}</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">Sin ventas</span>
+                          )
+                        ) : (
+                          <Badge variant="outline" className="font-mono text-[10px]">{formatPercentage(myShare)}</Badge>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center justify-between pt-1 border-t">
+                          {product.isDistributionValid ? (
+                            <span className="flex items-center gap-1 text-[10px] text-green-600"><CheckCircle className="h-3 w-3" /> Distribución 100%</span>
+                          ) : product.product_distributions?.length > 0 ? (
+                            <span className="flex items-center gap-1 text-[10px] text-red-600"><WarningCircle className="h-3 w-3" /> {product.totalPercentage}%</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">Sin distribución</span>
+                          )}
+                        </div>
+                      )}
+                      {!isAdmin && myEarnings > 0 && (
+                        <div className="pt-1 border-t">
+                          <p className="text-[10px] text-muted-foreground">Mis ganancias</p>
+                          <p className="text-xs font-mono font-medium tabular-nums">{formatUSD(myEarnings)}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Mobile card view (list mode only) */}
+      <div className={cn("space-y-2 md:hidden", viewMode === "grid" && "hidden")}>
         {filtered.length === 0 ? (
           <Card className="border-0 shadow-sm">
             <CardContent className="flex h-[200px] items-center justify-center text-muted-foreground">
@@ -644,8 +778,8 @@ export function ProductsClient({
         )}
       </div>
 
-      {/* Desktop table view */}
-      <Card className="border-0 shadow-sm hidden md:block">
+      {/* Desktop table view (list mode only) */}
+      <Card className={cn("border-0 shadow-sm hidden md:block", viewMode === "grid" && "md:hidden")}>
         <CardContent className="p-0">
           {filtered.length === 0 ? (
             <div className="flex h-[300px] items-center justify-center text-muted-foreground">
@@ -680,30 +814,31 @@ export function ProductsClient({
                     )}
                     {isColVisible("name") && (
                       <th className="p-3 font-medium text-muted-foreground">
-                        <button onClick={() => toggleSort("name")} className="flex items-center gap-1">Producto <SortIcon field="name" /></button>
+                        <button onClick={() => toggleSort("name")} className="flex items-center gap-1">Producto <SortIcon field="name" sortField={sortField} sortDir={sortDir} /></button>
                       </th>
                     )}
                     {isColVisible("type") && (
                       <th className="p-3 font-medium text-muted-foreground">
-                        <button onClick={() => toggleSort("type")} className="flex items-center gap-1">Tipo <SortIcon field="type" /></button>
+                        <button onClick={() => toggleSort("type")} className="flex items-center gap-1">Tipo <SortIcon field="type" sortField={sortField} sortDir={sortDir} /></button>
                       </th>
                     )}
                     {isColVisible("revenue") && (
                       <th className="p-3 font-medium text-muted-foreground">
-                        <button onClick={() => toggleSort("revenue")} className="flex items-center gap-1">Ingreso <SortIcon field="revenue" /></button>
+                        <button onClick={() => toggleSort("revenue")} className="flex items-center gap-1">Ingreso <SortIcon field="revenue" sortField={sortField} sortDir={sortDir} /></button>
                       </th>
                     )}
                     {isColVisible("trend") && <th className="p-3 font-medium text-muted-foreground">Tendencia</th>}
+                    {isColVisible("health") && <th className="p-3 font-medium text-muted-foreground">Salud</th>}
                     {isColVisible("distribution") && (
                       <th className="p-3 font-medium text-muted-foreground">
-                        <button onClick={() => toggleSort("distribution")} className="flex items-center gap-1">Distribucion <SortIcon field="distribution" /></button>
+                        <button onClick={() => toggleSort("distribution")} className="flex items-center gap-1">Distribucion <SortIcon field="distribution" sortField={sortField} sortDir={sortDir} /></button>
                       </th>
                     )}
                     {isColVisible("lifecycle") && <th className="p-3 font-medium text-muted-foreground">Lifecycle</th>}
                     {isColVisible("partner") && <th className="p-3 font-medium text-muted-foreground">Partner</th>}
                     {isColVisible("status") && (
                       <th className="p-3 font-medium text-muted-foreground">
-                        <button onClick={() => toggleSort("status")} className="flex items-center gap-1">Estado <SortIcon field="status" /></button>
+                        <button onClick={() => toggleSort("status")} className="flex items-center gap-1">Estado <SortIcon field="status" sortField={sortField} sortDir={sortDir} /></button>
                       </th>
                     )}
                     {isColVisible("actions") && <th className="p-3 font-medium text-muted-foreground text-right">Acciones</th>}
@@ -767,12 +902,21 @@ export function ProductsClient({
                         {isColVisible("trend") && (
                           <td className="p-3">{revenue ? <MiniSparkline data={revenue.trend} /> : <span className="text-xs text-muted-foreground">—</span>}</td>
                         )}
+                        {isColVisible("health") && (
+                          <td className="p-3">
+                            {revenue ? (
+                              <HealthDot health={computeHealthFromTrend(revenue.trend)} />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                        )}
                         {isColVisible("distribution") && (
                           <td className="p-3">
                             {product.isDistributionValid ? (
-                              <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle2 className="h-3.5 w-3.5" /> 100%</span>
+                              <span className="flex items-center gap-1 text-xs text-green-600"><CheckCircle className="h-3.5 w-3.5" /> 100%</span>
                             ) : product.product_distributions?.length > 0 ? (
-                              <span className="flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3.5 w-3.5" /> {product.totalPercentage}%</span>
+                              <span className="flex items-center gap-1 text-xs text-red-600"><WarningCircle className="h-3.5 w-3.5" /> {product.totalPercentage}%</span>
                             ) : (
                               <span className="text-xs text-muted-foreground">Sin configurar</span>
                             )}

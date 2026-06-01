@@ -2,24 +2,24 @@
 
 import { useState, useMemo } from "react";
 import {
-  LayoutDashboard,
+  SquaresFour,
   FileText,
   Package,
   Users,
   CreditCard,
-  UserCog,
-  Settings,
-  Search,
+  UserGear,
+  Gear,
+  MagnifyingGlass,
   Shield,
   Upload,
-  ChevronDown,
-  ChevronRight,
+  CaretDown,
+  CaretRight,
   BookOpen,
-  BarChart3,
+  ChartBar,
   Lock,
   Wallet,
-  LogIn,
-} from "lucide-react";
+  SignIn,
+} from "@phosphor-icons/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +48,7 @@ const helpSections: HelpSection[] = [
   {
     id: "auth",
     title: "Inicio de Sesion y Cuenta",
-    icon: LogIn,
+    icon: SignIn,
     roles: ["super_admin", "admin", "collaborator"],
     description: "Como acceder a la plataforma, configurar tu cuenta y opciones de seguridad.",
     articles: [
@@ -90,7 +90,7 @@ const helpSections: HelpSection[] = [
   {
     id: "dashboard",
     title: "Dashboard",
-    icon: LayoutDashboard,
+    icon: SquaresFour,
     roles: ["super_admin", "admin", "collaborator"],
     description: "Vista principal con resumen de la actividad, ganancias y metricas.",
     articles: [
@@ -338,7 +338,7 @@ const helpSections: HelpSection[] = [
   {
     id: "analytics",
     title: "Analytics",
-    icon: BarChart3,
+    icon: ChartBar,
     roles: ["super_admin", "admin"],
     description: "Graficas y metricas avanzadas de rendimiento financiero.",
     articles: [
@@ -360,7 +360,7 @@ const helpSections: HelpSection[] = [
   {
     id: "settings",
     title: "Configuracion",
-    icon: UserCog,
+    icon: UserGear,
     roles: ["super_admin", "admin", "collaborator"],
     description: "Perfil personal, seguridad, sesiones activas y Google.",
     articles: [
@@ -394,7 +394,7 @@ const helpSections: HelpSection[] = [
   {
     id: "admin",
     title: "Administracion",
-    icon: Settings,
+    icon: Gear,
     roles: ["super_admin", "admin"],
     description: "Gestion de partners, impuestos y registro de actividad.",
     articles: [
@@ -494,7 +494,7 @@ export function HelpClient({ userRole }: Props) {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar en la documentacion..."
           value={search}
@@ -508,7 +508,7 @@ export function HelpClient({ userRole }: Props) {
         <Card className="border-0 shadow-sm">
           <CardContent className="flex h-[200px] items-center justify-center text-muted-foreground">
             <div className="text-center">
-              <Search className="mx-auto h-8 w-8 mb-2 opacity-30" />
+              <MagnifyingGlass className="mx-auto h-8 w-8 mb-2 opacity-30" />
               <p className="text-sm">No se encontraron resultados para "{search}"</p>
             </div>
           </CardContent>
@@ -542,9 +542,9 @@ export function HelpClient({ userRole }: Props) {
                     {visibleArticles.length} articulo{visibleArticles.length !== 1 ? "s" : ""}
                   </Badge>
                   {isExpanded ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <CaretDown className="h-4 w-4 text-muted-foreground shrink-0" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <CaretRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
                 </button>
 
@@ -562,9 +562,9 @@ export function HelpClient({ userRole }: Props) {
                             className="flex items-center gap-3 w-full px-5 py-3 text-left hover:bg-muted/20 transition-colors"
                           >
                             {isArticleOpen ? (
-                              <ChevronDown className="h-3.5 w-3.5 text-primary shrink-0" />
+                              <CaretDown className="h-3.5 w-3.5 text-primary shrink-0" />
                             ) : (
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <CaretRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                             )}
                             <span
                               className={cn(
