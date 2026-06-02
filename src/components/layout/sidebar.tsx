@@ -177,8 +177,8 @@ export function Sidebar({
       {/* BoxBuild brand */}
       <div
         className={cn(
-          "flex h-16 items-center px-3 transition-all",
-          isCollapsed ? "justify-center" : "gap-1"
+          "flex h-16 items-center transition-all",
+          isCollapsed ? "justify-center px-2" : "gap-1 px-3"
         )}
       >
         <Link
@@ -186,16 +186,16 @@ export function Sidebar({
           className={cn(
             "flex items-center rounded-lg transition-colors hover:bg-muted/60",
             isCollapsed
-              ? "h-9 w-9 justify-center"
+              ? "h-10 w-10 justify-center"
               : "h-9 flex-1 gap-2 px-2"
           )}
           title={isCollapsed ? "BoxBuild" : undefined}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center">
             <img
               src="/brand/WebIcon.png"
               alt="BoxBuild"
-              className="h-7 w-7"
+              className="h-8 w-8 object-contain"
             />
           </div>
           {!isCollapsed && (

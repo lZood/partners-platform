@@ -369,22 +369,10 @@ export default function LoginPage() {
             <img
               src="/brand/WebIcon.png"
               alt="BoxBuild"
-              className="h-16 w-16"
+              className="h-16 w-16 object-contain"
             />
           </div>
-          <div className="mx-auto mb-2 flex items-center justify-center">
-            <img
-              src="/brand/LogoComletoWhiteTheme.png"
-              alt="BoxBuild"
-              className="h-8 w-auto block dark:hidden"
-            />
-            <img
-              src="/brand/LogoCompleto_DarkTheme.png"
-              alt="BoxBuild"
-              className="h-8 w-auto hidden dark:block"
-            />
-          </div>
-          <CardTitle className="sr-only">BoxBuild</CardTitle>
+          <CardTitle className="text-2xl">Partners Platform</CardTitle>
           <CardDescription>
             Inicia sesion para acceder al panel de gestion
           </CardDescription>
