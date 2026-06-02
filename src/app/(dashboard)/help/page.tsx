@@ -15,12 +15,16 @@ export default async function HelpPage() {
 
   const { data: appUser } = await supabase
     .from("users")
-    .select("user_partner_roles (role)")
+    .select("name, email, user_partner_roles (role)")
     .eq("auth_user_id", user.id)
     .single();
 
   const userRole =
     (appUser?.user_partner_roles as any)?.[0]?.role ?? "collaborator";
+  const userName =
+    (appUser as any)?.name ?? (appUser as any)?.email ?? "Usuario";
 
-  return <HelpClient userRole={userRole} />;
+  return (
+    <HelpClient userRole={userRole} userId={user.id} userName={userName} />
+  );
 }
