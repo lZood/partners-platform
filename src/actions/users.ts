@@ -44,13 +44,6 @@ function wrapAuthLink(
   });
   return `${getBaseUrl()}/auth/confirm?${params.toString()}`;
 }
-
-  const headersList = headers();
-  const host = headersList.get("host") ?? "localhost:3000";
-  const protocol = headersList.get("x-forwarded-proto") ?? "http";
-  return `${protocol}://${host}`;
-}
-
 /**
  * Get all collaborators visible to the current user.
  * Includes their partner roles.
