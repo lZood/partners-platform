@@ -365,8 +365,17 @@ export default function LoginPage() {
         className="w-full max-w-md border-border/60 bg-card/95 shadow-xl backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-4 duration-500 ease-out"
       >
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xl font-bold shadow-md transition-transform duration-300 hover:scale-105">
-            B
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center transition-transform duration-300 hover:scale-105">
+            <img
+              src="/brand/logo-mark.svg"
+              alt="BoxBuild"
+              className="h-14 w-14 block dark:hidden"
+            />
+            <img
+              src="/brand/logo-mark-light.svg"
+              alt="BoxBuild"
+              className="h-14 w-14 hidden dark:block"
+            />
           </div>
           <CardTitle className="text-2xl">BoxBuild</CardTitle>
           <CardDescription>

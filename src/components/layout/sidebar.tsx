@@ -191,8 +191,17 @@ export function Sidebar({
           )}
           title={isCollapsed ? "BoxBuild" : undefined}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground text-background text-[13px] font-bold tracking-tight">
-            B
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+            <img
+              src="/brand/logo-mark.svg"
+              alt="BoxBuild"
+              className="h-7 w-7 block dark:hidden"
+            />
+            <img
+              src="/brand/logo-mark-light.svg"
+              alt="BoxBuild"
+              className="h-7 w-7 hidden dark:block"
+            />
           </div>
           {!isCollapsed && (
             <span className="text-[15px] font-bold tracking-[0.02em]">
