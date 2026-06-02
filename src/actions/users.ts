@@ -23,6 +23,23 @@ function getBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   }
+
+// Wrap Supabase's raw verify URL in our /auth/confirm page so email-security
+// scanners (Gmail/Outlook/etc.) cannot pre-fetch and burn the one-time token.
+// See src/app/auth/confirm/page.tsx for full rationale.
+function wrapAuthLink(
+  hashedToken: string,
+  type: "recovery" | "invite" | "magiclink" | "email" | "email_change",
+  next: string
+): string {
+  const params = new URLSearchParams({
+    token_hash: hashedToken,
+    type,
+    next,
+  });
+  return `${getBaseUrl()}/auth/confirm?${params.toString()}`;
+}
+
   const headersList = headers();
   const host = headersList.get("host") ?? "localhost:3000";
   const protocol = headersList.get("x-forwarded-proto") ?? "http";
@@ -196,7 +213,7 @@ export async function createCollaborator(
     if (!skipInvite) {
       // Use Supabase's action_link which goes through their /auth/v1/verify endpoint.
       // This handles OTP verification properly, then redirects to our redirectTo URL.
-      const inviteLink = linkData.properties.action_link;
+      const inviteLink = wrapAuthLink(linkData.properties.hashed_token, "invite", "/auth/set-password");
 
       const emailResult = await sendInvitationEmail({
         to: parsed.data.email,
@@ -416,7 +433,7 @@ export async function resendInvitation(
 
   // Send the email ourselves via our SMTP
   // Use Supabase's action_link which handles OTP verification properly
-  const inviteLink = linkData.properties.action_link;
+  const inviteLink = wrapAuthLink(linkData.properties.hashed_token, "invite", "/auth/set-password");
 
   const emailResult = await sendInvitationEmail({
     to: targetUser.email,
