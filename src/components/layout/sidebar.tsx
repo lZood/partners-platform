@@ -174,7 +174,7 @@ export function Sidebar({
 
   const sidebarContent = (
     <div className="flex h-full flex-col">
-      {/* BOXFI brand */}
+      {/* BoxBuild brand */}
       <div
         className={cn(
           "flex h-16 items-center px-3 transition-all",
@@ -189,14 +189,23 @@ export function Sidebar({
               ? "h-9 w-9 justify-center"
               : "h-9 flex-1 gap-2 px-2"
           )}
-          title={isCollapsed ? "BOXFI" : undefined}
+          title={isCollapsed ? "BoxBuild" : undefined}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground text-background text-[13px] font-bold tracking-tight">
-            B
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+            <img
+              src="/brand/logo-mark.svg"
+              alt="BoxBuild"
+              className="h-7 w-7 block dark:hidden"
+            />
+            <img
+              src="/brand/logo-mark-light.svg"
+              alt="BoxBuild"
+              className="h-7 w-7 hidden dark:block"
+            />
           </div>
           {!isCollapsed && (
             <span className="text-[15px] font-bold tracking-[0.02em]">
-              BOXFI
+              BoxBuild
             </span>
           )}
         </Link>

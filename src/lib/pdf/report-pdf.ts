@@ -459,7 +459,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         .fontSize(7.5)
         .fillColor(C.muted)
         .text(
-          `BoxFi Partners · ${data.partnerName} · Generado el ${generatedAt}`,
+          `BoxBuild · ${data.partnerName} · Generado el ${generatedAt}`,
           M.left,
           footY + 6,
           { lineBreak: false }

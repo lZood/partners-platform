@@ -53,7 +53,7 @@ export async function setup2FA(): Promise<Result> {
 
   const secret = new OTPAuth.Secret({ size: 20 });
   const totp = new OTPAuth.TOTP({
-    issuer: "BoxFi Partners",
+    issuer: "BoxBuild",
     label: (appUser as any).email ?? (appUser as any).name,
     algorithm: "SHA1",
     digits: 6,

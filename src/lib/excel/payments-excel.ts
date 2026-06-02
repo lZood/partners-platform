@@ -25,7 +25,7 @@ const currencyFormat = '"$"#,##0.00';
 
 export async function generatePaymentsExcel(data: PaymentExcelData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "BoxFi Partners";
+  wb.creator = "BoxBuild";
 
   // Sheet 1: Summary
   const sheet = wb.addWorksheet("Pagos");

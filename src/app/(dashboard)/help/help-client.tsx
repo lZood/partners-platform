@@ -487,7 +487,7 @@ export function HelpClient({ userRole }: Props) {
           Centro de Ayuda
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Guias y documentacion de la plataforma BoxFi Partners.
+          Guias y documentacion de la plataforma BoxBuild.
           Viendo contenido para: <Badge variant="outline" className="ml-1">{roleLabel}</Badge>
         </p>
       </div>

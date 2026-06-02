@@ -113,7 +113,7 @@ function styleHeaderRow(sheet: ExcelJS.Worksheet, rowIdx: number, colSpan: numbe
 
 export async function generateReportExcel(data: ReportExcelData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "BoxFi Partners";
+  wb.creator = "BoxBuild";
   wb.created = new Date(0); // deterministic; avoids Date.now usage concerns
   const periodLabel = formatMonth(data.reportMonth);
 

@@ -68,9 +68,9 @@ export async function sendInvitationEmail(params: {
     const from = getSender();
 
     await transporter.sendMail({
-      from: `"Partners Platform" <${from}>`,
+      from: `"BoxBuild" <${from}>`,
       to: params.to,
-      subject: "Invitacion a Partners Platform",
+      subject: "Invitacion a BoxBuild",
       html: `
         <!DOCTYPE html>
         <html>
@@ -85,7 +85,7 @@ export async function sendInvitationEmail(params: {
             </div>
 
             <h1 style="font-size: 22px; font-weight: 700; color: #18181b; text-align: center; margin: 0 0 8px;">
-              Bienvenido a Partners Platform
+              Bienvenido a BoxBuild
             </h1>
 
             <p style="color: #71717a; text-align: center; font-size: 15px; margin: 0 0 32px;">
@@ -113,7 +113,7 @@ export async function sendInvitationEmail(params: {
         </body>
         </html>
       `,
-      text: `Hola ${params.userName}, has sido invitado a Partners Platform. Configura tu contraseña aqui: ${params.inviteLink}`,
+      text: `Hola ${params.userName}, has sido invitado a BoxBuild. Configura tu contraseña aqui: ${params.inviteLink}`,
     });
 
     return { success: true };
@@ -141,9 +141,9 @@ export async function sendPasswordResetEmail(params: {
     const from = getSender();
 
     await transporter.sendMail({
-      from: `"BoxFi Partners" <${from}>`,
+      from: `"BoxBuild" <${from}>`,
       to: params.to,
-      subject: "Restablecer tu contrasena - BoxFi Partners",
+      subject: "Restablecer tu contrasena - BoxBuild",
       html: `
         <!DOCTYPE html>
         <html>
@@ -233,7 +233,7 @@ export async function sendReportNotificationEmail(params: {
     const amount = `$${params.totalUsd.toFixed(2)} USD`;
 
     await transporter.sendMail({
-      from: `"BoxFi Partners" <${from}>`,
+      from: `"BoxBuild" <${from}>`,
       to: params.to,
       subject: `Nuevo reporte de ganancias - ${params.reportMonth}`,
       html: `
@@ -258,7 +258,7 @@ export async function sendReportNotificationEmail(params: {
               Ingresa a la plataforma para ver el detalle completo de tus ganancias.
             </p>
             <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0;">
-            <p style="color: #a1a1aa; font-size: 11px; text-align: center; margin: 0;">BoxFi Partners Platform</p>
+            <p style="color: #a1a1aa; font-size: 11px; text-align: center; margin: 0;">BoxBuild</p>
           </div>
         </body>
         </html>
@@ -295,7 +295,7 @@ export async function sendPaymentNotificationEmail(params: {
     });
 
     await transporter.sendMail({
-      from: `"BoxFi Partners" <${from}>`,
+      from: `"BoxBuild" <${from}>`,
       to: params.to,
       subject: `Pago registrado - ${amountUsd}`,
       html: `
@@ -324,7 +324,7 @@ export async function sendPaymentNotificationEmail(params: {
               Ingresa a la plataforma para ver el detalle y descargar tu recibo.
             </p>
             <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0;">
-            <p style="color: #a1a1aa; font-size: 11px; text-align: center; margin: 0;">BoxFi Partners Platform</p>
+            <p style="color: #a1a1aa; font-size: 11px; text-align: center; margin: 0;">BoxBuild</p>
           </div>
         </body>
         </html>
