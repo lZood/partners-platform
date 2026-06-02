@@ -13,9 +13,15 @@ export type ActionResult = {
 };
 
 function getBaseUrl(): string {
+  // Use explicit env var if available (recommended for production)
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   }
+  const headersList = headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") ?? "http";
+  return `${protocol}://${host}`;
+}
 
 // Wrap Supabase's raw verify URL in our /auth/confirm page so email-security
 // scanners (Gmail/Outlook/etc.) cannot pre-fetch and burn the one-time token.
