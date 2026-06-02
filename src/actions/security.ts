@@ -36,14 +36,6 @@ function wrapAuthLink(
   });
   return `${getBaseUrl()}/auth/confirm?${params.toString()}`;
 }
-
-  const h = headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
-  const protocol = h.get("x-forwarded-proto") || "http";
-  const origin = `${protocol}://${host}`;
-  return origin.replace("0.0.0.0", "localhost");
-}
-
 function generateRecoveryCodes(count: number = 8): string[] {
   const codes: string[] = [];
   for (let i = 0; i < count; i++) {
