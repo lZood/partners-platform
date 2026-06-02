@@ -1,5 +1,22 @@
 import PDFDocument from "pdfkit";
+import path from "path";
+import fs from "fs";
 import { formatUSD, formatMXN, formatPercentage, formatMonth } from "@/lib/utils";
+
+const BRAND_LOGO_DARK_PATH = path.join(
+  process.cwd(),
+  "public",
+  "brand",
+  "LogoCompleto_DarkTheme.png"
+);
+
+function getBrandLogoDarkBuffer(): Buffer | null {
+  try {
+    return fs.readFileSync(BRAND_LOGO_DARK_PATH);
+  } catch {
+    return null;
+  }
+}
 
 export interface ReportPDFData {
   reportMonth: string; // "2026-03-01"
@@ -234,6 +251,23 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         align: "center",
         lineBreak: false,
       });
+
+    // BoxBuild brand mark on the right side of the dark banner.
+    const brandLogoDark = getBrandLogoDarkBuffer();
+    if (brandLogoDark) {
+      try {
+        const logoW = 70;
+        const logoH = 28;
+        doc.image(
+          brandLogoDark,
+          PAGE_W - M.right - logoW,
+          pillY + pillH + 8,
+          { fit: [logoW, logoH] }
+        );
+      } catch {
+        // Ignore image errors; the report remains valid without it.
+      }
+    }
 
     let y = bannerH + M.top + 8;
 

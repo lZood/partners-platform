@@ -365,19 +365,26 @@ export default function LoginPage() {
         className="w-full max-w-md border-border/60 bg-card/95 shadow-xl backdrop-blur-sm animate-in fade-in-50 slide-in-from-bottom-4 duration-500 ease-out"
       >
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center transition-transform duration-300 hover:scale-105">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center transition-transform duration-300 hover:scale-105">
             <img
-              src="/brand/logo-mark.svg"
+              src="/brand/WebIcon.png"
               alt="BoxBuild"
-              className="h-14 w-14 block dark:hidden"
-            />
-            <img
-              src="/brand/logo-mark-light.svg"
-              alt="BoxBuild"
-              className="h-14 w-14 hidden dark:block"
+              className="h-16 w-16"
             />
           </div>
-          <CardTitle className="text-2xl">BoxBuild</CardTitle>
+          <div className="mx-auto mb-2 flex items-center justify-center">
+            <img
+              src="/brand/LogoComletoWhiteTheme.png"
+              alt="BoxBuild"
+              className="h-8 w-auto block dark:hidden"
+            />
+            <img
+              src="/brand/LogoCompleto_DarkTheme.png"
+              alt="BoxBuild"
+              className="h-8 w-auto hidden dark:block"
+            />
+          </div>
+          <CardTitle className="sr-only">BoxBuild</CardTitle>
           <CardDescription>
             Inicia sesion para acceder al panel de gestion
           </CardDescription>

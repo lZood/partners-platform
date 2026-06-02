@@ -1,5 +1,22 @@
 import PDFDocument from "pdfkit";
+import path from "path";
+import fs from "fs";
 import { formatUSD, formatMXN } from "@/lib/utils";
+
+const BRAND_LOGO_PATH = path.join(
+  process.cwd(),
+  "public",
+  "brand",
+  "LogoPdfCompleto.png"
+);
+
+function getBrandLogoBuffer(): Buffer | null {
+  try {
+    return fs.readFileSync(BRAND_LOGO_PATH);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * A single product distribution row in the payment receipt.
@@ -328,6 +345,23 @@ export async function generateReceiptPDF(
       width: CONTENT_W,
       align: "center",
     });
+
+    // BoxBuild brand mark at the bottom.
+    const brandLogo = getBrandLogoBuffer();
+    if (brandLogo) {
+      try {
+        const logoW = 70;
+        const logoH = 16;
+        doc.image(
+          brandLogo,
+          PAGE_LEFT + (CONTENT_W - logoW) / 2,
+          doc.y + 8,
+          { fit: [logoW, logoH] }
+        );
+      } catch {
+        // Ignore image errors; the receipt remains valid without it.
+      }
+    }
 
     doc.end();
   });

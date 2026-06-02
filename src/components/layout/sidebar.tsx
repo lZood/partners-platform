@@ -193,20 +193,24 @@ export function Sidebar({
         >
           <div className="flex h-7 w-7 shrink-0 items-center justify-center">
             <img
-              src="/brand/logo-mark.svg"
+              src="/brand/WebIcon.png"
               alt="BoxBuild"
-              className="h-7 w-7 block dark:hidden"
-            />
-            <img
-              src="/brand/logo-mark-light.svg"
-              alt="BoxBuild"
-              className="h-7 w-7 hidden dark:block"
+              className="h-7 w-7"
             />
           </div>
           {!isCollapsed && (
-            <span className="text-[15px] font-bold tracking-[0.02em]">
-              BoxBuild
-            </span>
+            <>
+              <img
+                src="/brand/LogoComletoWhiteTheme.png"
+                alt="BoxBuild"
+                className="h-6 w-auto block dark:hidden"
+              />
+              <img
+                src="/brand/LogoCompleto_DarkTheme.png"
+                alt="BoxBuild"
+                className="h-6 w-auto hidden dark:block"
+              />
+            </>
           )}
         </Link>
         <button

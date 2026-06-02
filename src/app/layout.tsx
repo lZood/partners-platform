@@ -10,7 +10,9 @@ export const metadata: Metadata = {
   title: "BoxBuild",
   description: "Gestión y distribución de ganancias de productos digitales",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    icon: [{ url: "/brand/WebIcon.png", type: "image/png" }],
+    shortcut: "/brand/WebIcon.png",
+    apple: "/brand/WebIcon.png",
   },
 };
 

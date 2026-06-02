@@ -56,6 +56,16 @@ function getSender(): string {
 }
 
 /**
+ * Absolute URL to the BoxBuild email logo (full lockup).
+ * Email clients render outside the app, so we need an absolute https URL.
+ */
+function getLogoUrl(): string {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? "https://app.box-build.com")
+    .replace(/\/$/, "");
+  return `${base}/brand/LogoMails.png`;
+}
+
+/**
  * Send an invitation email with a link to set their password.
  */
 export async function sendInvitationEmail(params: {
@@ -81,7 +91,7 @@ export async function sendInvitationEmail(params: {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f4f5; padding: 40px 20px;">
           <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div style="text-align: center; margin-bottom: 32px;">
-              <div style="display: inline-block; background: #18181b; color: white; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; font-size: 20px; font-weight: bold;">P</div>
+              <img src="${getLogoUrl()}" alt="BoxBuild" width="160" style="max-width: 160px; height: auto; display: inline-block;">
             </div>
 
             <h1 style="font-size: 22px; font-weight: 700; color: #18181b; text-align: center; margin: 0 0 8px;">
@@ -154,7 +164,7 @@ export async function sendPasswordResetEmail(params: {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f4f5; padding: 40px 20px;">
           <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div style="text-align: center; margin-bottom: 32px;">
-              <div style="display: inline-block; background: #18181b; color: white; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; font-size: 20px; font-weight: bold;">B</div>
+              <img src="${getLogoUrl()}" alt="BoxBuild" width="160" style="max-width: 160px; height: auto; display: inline-block;">
             </div>
 
             <h1 style="font-size: 22px; font-weight: 700; color: #18181b; text-align: center; margin: 0 0 8px;">
@@ -243,7 +253,7 @@ export async function sendReportNotificationEmail(params: {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f4f5; padding: 40px 20px;">
           <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div style="text-align: center; margin-bottom: 32px;">
-              <div style="display: inline-block; background: #3b82f6; color: white; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; font-size: 20px; font-weight: bold;">B</div>
+              <img src="${getLogoUrl()}" alt="BoxBuild" width="160" style="max-width: 160px; height: auto; display: inline-block;">
             </div>
             <h1 style="font-size: 22px; font-weight: 700; color: #18181b; text-align: center; margin: 0 0 8px;">Nuevo Reporte de Ganancias</h1>
             <p style="color: #71717a; text-align: center; font-size: 15px; margin: 0 0 24px;">
@@ -305,7 +315,7 @@ export async function sendPaymentNotificationEmail(params: {
         <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f4f5; padding: 40px 20px;">
           <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <div style="text-align: center; margin-bottom: 32px;">
-              <div style="display: inline-block; background: #22c55e; color: white; width: 48px; height: 48px; line-height: 48px; border-radius: 10px; font-size: 20px; font-weight: bold;">$</div>
+              <img src="${getLogoUrl()}" alt="BoxBuild" width="160" style="max-width: 160px; height: auto; display: inline-block;">
             </div>
             <h1 style="font-size: 22px; font-weight: 700; color: #18181b; text-align: center; margin: 0 0 8px;">Pago Registrado</h1>
             <p style="color: #71717a; text-align: center; font-size: 15px; margin: 0 0 24px;">
