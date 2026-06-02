@@ -2,17 +2,19 @@ import PDFDocument from "pdfkit";
 import path from "path";
 import fs from "fs";
 import { formatUSD, formatMXN } from "@/lib/utils";
+import { PDF as C } from "@/lib/brand/theme";
+import { registerBrandFonts, type BrandFonts } from "@/lib/brand/pdf-fonts";
 
-const BRAND_LOGO_PATH = path.join(
+const BRAND_LOGO_DARK_PATH = path.join(
   process.cwd(),
   "public",
   "brand",
-  "LogoPdfCompleto.png"
+  "LogoCompleto_DarkTheme.png" // white wordmark — for the dark banner
 );
 
 function getBrandLogoBuffer(): Buffer | null {
   try {
-    return fs.readFileSync(BRAND_LOGO_PATH);
+    return fs.readFileSync(BRAND_LOGO_DARK_PATH);
   } catch {
     return null;
   }
@@ -71,13 +73,6 @@ export interface PaymentReceiptData {
   createdByName: string | null;
 }
 
-// Palette
-const INK = "#111827";
-const MUTED = "#6B7280";
-const BORDER = "#E5E7EB";
-const ZEBRA = "#F9FAFB";
-const ACCENT = "#DC2626";
-
 const PAGE_LEFT = 50;
 const PAGE_RIGHT = 562; // letter width 612 - 50 margin
 const CONTENT_W = PAGE_RIGHT - PAGE_LEFT; // 512
@@ -102,80 +97,92 @@ export async function generateReceiptPDF(
       margins: { top: 40, bottom: 40, left: 50, right: 50 },
     });
 
+    // Brand typefaces (Anek Latin / Sora) — falls back to Helvetica if absent.
+    const F = registerBrandFonts(doc);
+
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    // ---- Header: partner name (left) + "PAGO" (right) ----
-    let headerY = 44;
+    // ════════════════════════════════════════════════════════════
+    // Dark brand banner
+    // ════════════════════════════════════════════════════════════
+    const bannerH = 70;
+    doc.save();
+    doc.rect(0, 0, 612, bannerH).fill(C.ink);
+    doc.restore();
 
-    // Optional logo to the left of the name.
-    let nameX = PAGE_LEFT;
+    // Optional partner logo on a white chip (reads on any background).
+    let titleX = PAGE_LEFT;
     if (data.partnerLogo) {
       try {
-        doc.image(data.partnerLogo, PAGE_LEFT, headerY - 2, {
-          fit: [34, 34],
+        const chip = 40;
+        const chipY = (bannerH - chip) / 2;
+        doc.save();
+        doc.roundedRect(PAGE_LEFT, chipY, chip, chip, 6).fill(C.white);
+        doc.restore();
+        doc.image(data.partnerLogo, PAGE_LEFT + 5, chipY + 5, {
+          fit: [chip - 10, chip - 10],
         });
-        nameX = PAGE_LEFT + 44;
+        titleX = PAGE_LEFT + chip + 12;
       } catch {
-        // Ignore invalid image data and fall back to text-only header.
-        nameX = PAGE_LEFT;
+        titleX = PAGE_LEFT;
       }
     }
 
     doc
-      .fillColor(INK)
-      .font("Helvetica-Bold")
-      .fontSize(26)
-      .text((data.partnerName || "").toUpperCase(), nameX, headerY, {
-        // Stop short of the right-aligned "PAGO" label so long names truncate
-        // instead of overlapping it.
-        width: PAGE_RIGHT - 170 - nameX,
+      .font(F.display)
+      .fontSize(20)
+      .fillColor(C.white)
+      .text("Comprobante de Pago", titleX, 18, { lineBreak: false });
+    doc
+      .font(F.body)
+      .fontSize(10)
+      .fillColor(C.onDarkMuted)
+      .text((data.partnerName || "").toUpperCase(), titleX, 44, {
+        width: 320,
         lineBreak: false,
         ellipsis: true,
       });
 
-    doc
-      .fillColor(INK)
-      .font("Helvetica-Bold")
-      .fontSize(26)
-      .text("PAGO", PAGE_RIGHT - 160, headerY, {
-        width: 160,
-        align: "right",
-      });
+    // BoxBuild wordmark on the right of the banner.
+    const brandLogo = getBrandLogoBuffer();
+    if (brandLogo) {
+      try {
+        const logoW = 78;
+        const logoH = 22;
+        doc.image(brandLogo, PAGE_RIGHT - logoW, (bannerH - logoH) / 2, {
+          fit: [logoW, logoH],
+        });
+      } catch {
+        // Ignore image errors; the receipt remains valid without it.
+      }
+    }
 
-    headerY += 40;
-    doc
-      .moveTo(PAGE_LEFT, headerY)
-      .lineTo(PAGE_RIGHT, headerY)
-      .lineWidth(1)
-      .strokeColor(INK)
-      .stroke();
-
-    // ---- DATA block ----
-    let y = headerY + 16;
+    // ---- DATOS block ----
+    let y = bannerH + 22;
 
     const paidDate = formatDateDMY(data.paidAt);
     doc
-      .font("Helvetica-Bold")
+      .font(F.bodyBold)
       .fontSize(10)
-      .fillColor(INK)
+      .fillColor(C.ink)
       .text("DATOS", PAGE_LEFT, y);
-    drawRightLabelValue(doc, "FECHA:", paidDate, PAGE_RIGHT, y);
+    drawRightLabelValue(doc, F, "FECHA:", paidDate, PAGE_RIGHT, y);
 
     y += 20;
-    drawLeftLabelValue(doc, "NOMBRE:", data.userName, PAGE_LEFT, y);
+    drawLeftLabelValue(doc, F, "NOMBRE:", data.userName, PAGE_LEFT, y);
 
     y += 16;
     const period =
       data.salesPeriods.length > 0 ? data.salesPeriods.join(" · ") : "—";
-    drawLeftLabelValue(doc, "PERIODO DE VENTAS:", period, PAGE_LEFT, y);
+    drawLeftLabelValue(doc, F, "PERIODO DE VENTAS:", period, PAGE_LEFT, y);
 
     y += 28;
 
     // ---- Product distribution table ----
     if (data.products.length > 0) {
-      y = drawTableHeader(doc, y);
+      y = drawTableHeader(doc, F, y);
 
       let lastPeriod: string | null = null;
       let zebra = false;
@@ -185,7 +192,7 @@ export async function generateReceiptPDF(
         if (y + ROW_H > PAGE_BOTTOM) {
           doc.addPage();
           y = 50;
-          y = drawTableHeader(doc, y);
+          y = drawTableHeader(doc, F, y);
           lastPeriod = null;
           zebra = false;
         }
@@ -198,9 +205,9 @@ export async function generateReceiptPDF(
         ) {
           if (lastPeriod !== null) y += 6;
           doc
-            .font("Helvetica-Bold")
+            .font(F.bodyBold)
             .fontSize(8)
-            .fillColor(MUTED)
+            .fillColor(C.muted)
             .text(row.salesPeriod.toUpperCase(), COL_PRODUCT_X + 4, y + 4, {
               width: COL_PRODUCT_W,
             });
@@ -210,18 +217,18 @@ export async function generateReceiptPDF(
         }
 
         if (zebra) {
-          doc.rect(PAGE_LEFT, y, CONTENT_W, ROW_H).fill(ZEBRA);
+          doc.rect(PAGE_LEFT, y, CONTENT_W, ROW_H).fill(C.paper);
         }
         zebra = !zebra;
 
-        doc.font("Helvetica").fontSize(9).fillColor(INK);
+        doc.font(F.body).fontSize(9).fillColor(C.ink);
         doc.text(row.product, COL_PRODUCT_X + 4, y + 7, {
           width: COL_PRODUCT_W - 8,
           lineBreak: false,
           ellipsis: true,
         });
         doc
-          .fillColor(MUTED)
+          .fillColor(C.muted)
           .text(row.distribution, COL_DIST_X, y + 7, {
             width: COL_DIST_W,
             align: "center",
@@ -229,7 +236,7 @@ export async function generateReceiptPDF(
             ellipsis: true,
           });
         doc
-          .fillColor(INK)
+          .fillColor(C.ink)
           .text(formatUSD(row.amountUsd), COL_AMOUNT_X, y + 7, {
             width: COL_AMOUNT_W - 4,
             align: "right",
@@ -243,7 +250,7 @@ export async function generateReceiptPDF(
         .moveTo(PAGE_LEFT, y)
         .lineTo(PAGE_RIGHT, y)
         .lineWidth(0.5)
-        .strokeColor(BORDER)
+        .strokeColor(C.line)
         .stroke();
       y += 4;
     }
@@ -262,45 +269,47 @@ export async function generateReceiptPDF(
     const earningsUsd = hasConcepts ? data.productsSubtotalUsd : data.totalUsd;
     const earningsMxn = hasConcepts ? data.productsSubtotalMxn : data.totalMxn;
 
-    y = drawTotalRow(doc, "TOTAL USD", formatUSD(earningsUsd), y, {});
+    y = drawTotalRow(doc, F, "TOTAL USD", formatUSD(earningsUsd), y, {});
     y = drawTotalRow(
       doc,
+      F,
       "TIPO DE CAMBIO",
       `$${data.exchangeRate.toFixed(2)}`,
       y,
       {}
     );
-    y = drawTotalRow(doc, "TOTAL MXN", formatMXN(earningsMxn), y, {
-      fill: INK,
-      textColor: "#FFFFFF",
+    y = drawTotalRow(doc, F, "TOTAL MXN", formatMXN(earningsMxn), y, {
+      fill: C.ink,
+      textColor: C.white,
       bold: true,
     });
 
     if (hasConcepts) {
       y += 6;
       for (const c of data.concepts) {
-        const label = c.isDeduction ? `${c.description}` : c.description;
+        const label = c.description;
         const value = `${c.isDeduction ? "-" : ""}${formatMXN(
           Math.abs(c.amountMxn)
         )}`;
-        y = drawTotalRow(doc, label, value, y, {
+        y = drawTotalRow(doc, F, label, value, y, {
           small: true,
-          textColor: c.isDeduction ? ACCENT : MUTED,
+          textColor: c.isDeduction ? C.negative : C.muted,
         });
       }
       y += 4;
-      y = drawTotalRow(doc, "GRAN TOTAL MXN", formatMXN(data.totalMxn), y, {
-        fill: ACCENT,
-        textColor: "#FFFFFF",
+      y = drawTotalRow(doc, F, "GRAN TOTAL MXN", formatMXN(data.totalMxn), y, {
+        fill: C.ink,
+        textColor: C.white,
         bold: true,
+        accent: true,
       });
-      y = drawTotalRow(doc, "GRAN TOTAL USD", formatUSD(data.totalUsd), y, {
+      y = drawTotalRow(doc, F, "GRAN TOTAL USD", formatUSD(data.totalUsd), y, {
         bold: true,
       });
     }
 
     // ---- Footer: payment meta + disclaimer ----
-    let footerY = Math.max(y + 30, PAGE_BOTTOM - 70);
+    let footerY = Math.max(y + 30, PAGE_BOTTOM - 60);
     if (footerY + 50 > PAGE_BOTTOM) {
       footerY = y + 24;
     }
@@ -309,11 +318,11 @@ export async function generateReceiptPDF(
       .moveTo(PAGE_LEFT, footerY)
       .lineTo(PAGE_RIGHT, footerY)
       .lineWidth(0.5)
-      .strokeColor(BORDER)
+      .strokeColor(C.line)
       .stroke();
     footerY += 8;
 
-    doc.font("Helvetica").fontSize(8).fillColor(MUTED);
+    doc.font(F.body).fontSize(8).fillColor(C.muted);
     const metaParts: string[] = [
       `Referencia: ${data.paymentId.substring(0, 8).toUpperCase()}`,
     ];
@@ -331,7 +340,7 @@ export async function generateReceiptPDF(
     doc.moveDown(0.6);
     doc
       .fontSize(7)
-      .fillColor("#9CA3AF")
+      .fillColor(C.faint)
       .text(
         "Este comprobante es un registro interno de pago y no tiene validez fiscal.",
         PAGE_LEFT,
@@ -345,23 +354,6 @@ export async function generateReceiptPDF(
       width: CONTENT_W,
       align: "center",
     });
-
-    // BoxBuild brand mark at the bottom.
-    const brandLogo = getBrandLogoBuffer();
-    if (brandLogo) {
-      try {
-        const logoW = 70;
-        const logoH = 16;
-        doc.image(
-          brandLogo,
-          PAGE_LEFT + (CONTENT_W - logoW) / 2,
-          doc.y + 8,
-          { fit: [logoW, logoH] }
-        );
-      } catch {
-        // Ignore image errors; the receipt remains valid without it.
-      }
-    }
 
     doc.end();
   });
@@ -379,49 +371,55 @@ function formatDateDMY(iso: string): string {
 
 function drawLeftLabelValue(
   doc: PDFKit.PDFDocument,
+  f: BrandFonts,
   label: string,
   value: string,
   x: number,
   y: number
 ) {
-  doc.font("Helvetica-Bold").fontSize(10).fillColor(INK);
+  doc.font(f.bodyBold).fontSize(10).fillColor(C.ink);
   const labelW = doc.widthOfString(label + " ");
   doc.text(label, x, y, { lineBreak: false });
   doc
-    .font("Helvetica")
+    .font(f.body)
     .fontSize(10)
-    .fillColor(MUTED)
+    .fillColor(C.muted)
     .text(value, x + labelW, y, { width: CONTENT_W - labelW, lineBreak: false, ellipsis: true });
 }
 
 function drawRightLabelValue(
   doc: PDFKit.PDFDocument,
+  f: BrandFonts,
   label: string,
   value: string,
   rightX: number,
   y: number
 ) {
-  doc.font("Helvetica-Bold").fontSize(10).fillColor(INK);
+  doc.font(f.bodyBold).fontSize(10).fillColor(C.ink);
   const labelW = doc.widthOfString(label + " ");
-  doc.font("Helvetica").fontSize(10).fillColor(MUTED);
+  doc.font(f.body).fontSize(10).fillColor(C.muted);
   const valueW = doc.widthOfString(value);
   const totalW = labelW + valueW;
   const startX = rightX - totalW;
   doc
-    .font("Helvetica-Bold")
+    .font(f.bodyBold)
     .fontSize(10)
-    .fillColor(INK)
+    .fillColor(C.ink)
     .text(label, startX, y, { lineBreak: false });
   doc
-    .font("Helvetica")
+    .font(f.body)
     .fontSize(10)
-    .fillColor(MUTED)
+    .fillColor(C.muted)
     .text(value, startX + labelW, y, { lineBreak: false });
 }
 
-function drawTableHeader(doc: PDFKit.PDFDocument, y: number): number {
-  doc.rect(PAGE_LEFT, y, CONTENT_W, ROW_H).fill(INK);
-  doc.font("Helvetica-Bold").fontSize(9).fillColor("#FFFFFF");
+function drawTableHeader(
+  doc: PDFKit.PDFDocument,
+  f: BrandFonts,
+  y: number
+): number {
+  doc.rect(PAGE_LEFT, y, CONTENT_W, ROW_H).fill(C.graphite);
+  doc.font(f.bodyBold).fontSize(9).fillColor(C.white);
   doc.text("PRODUCTO", COL_PRODUCT_X + 4, y + 7, { width: COL_PRODUCT_W - 8 });
   doc.text("DISTRIBUCIÓN", COL_DIST_X, y + 7, {
     width: COL_DIST_W,
@@ -436,6 +434,7 @@ function drawTableHeader(doc: PDFKit.PDFDocument, y: number): number {
 
 function drawTotalRow(
   doc: PDFKit.PDFDocument,
+  f: BrandFonts,
   label: string,
   value: string,
   y: number,
@@ -444,6 +443,8 @@ function drawTotalRow(
     textColor?: string;
     bold?: boolean;
     small?: boolean;
+    /** Draw the blue accent strip on a filled total row (marks the key figure). */
+    accent?: boolean;
   }
 ): number {
   const rowH = opts.small ? 16 : 20;
@@ -454,12 +455,15 @@ function drawTotalRow(
 
   if (opts.fill) {
     doc.rect(valueColX - 4, y, valueColW + 4, rowH).fill(opts.fill);
+    if (opts.accent) {
+      doc.rect(valueColX - 4, y, 3, rowH).fill(C.accent);
+    }
   }
 
   doc
-    .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+    .font(opts.bold ? f.bodyBold : f.body)
     .fontSize(opts.small ? 8 : 10)
-    .fillColor(opts.fill ? INK : opts.small ? (opts.textColor ?? MUTED) : INK)
+    .fillColor(opts.fill ? C.ink : opts.small ? (opts.textColor ?? C.muted) : C.ink)
     .text(label, labelColX, y + (opts.small ? 4 : 5), {
       width: labelColW,
       align: "right",
@@ -468,9 +472,9 @@ function drawTotalRow(
     });
 
   doc
-    .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+    .font(opts.bold ? f.bodyBold : f.body)
     .fontSize(opts.small ? 8 : 10)
-    .fillColor(opts.textColor ?? INK)
+    .fillColor(opts.textColor ?? C.ink)
     .text(value, valueColX, y + (opts.small ? 4 : 5), {
       width: valueColW - 4,
       align: "right",

@@ -1,4 +1,13 @@
 import ExcelJS from "exceljs";
+import { XLS } from "@/lib/brand/theme";
+import {
+  addBrandBanner,
+  styleHeaderRow,
+  fill,
+  thinBorder,
+  addBrandFooter,
+  applyBodyFontDefault,
+} from "@/lib/brand/excel-brand";
 
 interface CollaboratorExcelData {
   collaborators: {
@@ -13,71 +22,84 @@ interface CollaboratorExcelData {
   }[];
 }
 
-const headerStyle: Partial<ExcelJS.Style> = {
-  font: { bold: true, color: { argb: "FFFFFFFF" }, size: 11 },
-  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF3B82F6" } },
-  alignment: { horizontal: "center", vertical: "middle" },
-  border: {
-    bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
-  },
-};
-
 export async function generateCollaboratorsExcel(
   data: CollaboratorExcelData
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "BoxBuild";
 
-  const ws = wb.addWorksheet("Colaboradores");
+  const generatedAt = new Date().toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const ws = wb.addWorksheet("Colaboradores", {
+    views: [{ showGridLines: false, state: "frozen", ySplit: 4 }],
+  });
 
   ws.columns = [
-    { header: "Nombre", key: "name", width: 28 },
-    { header: "Email", key: "email", width: 30 },
-    { header: "Tipo", key: "userType", width: 16 },
-    { header: "Estado", key: "status", width: 12 },
-    { header: "Partners", key: "partners", width: 30 },
-    { header: "Roles", key: "roles", width: 20 },
-    { header: "Fecha de registro", key: "createdAt", width: 18 },
-    { header: "Ultima actividad", key: "lastActivity", width: 18 },
+    { key: "name", width: 28 },
+    { key: "email", width: 30 },
+    { key: "userType", width: 16 },
+    { key: "status", width: 12 },
+    { key: "partners", width: 30 },
+    { key: "roles", width: 20 },
+    { key: "createdAt", width: 18 },
+    { key: "lastActivity", width: 18 },
   ];
+  const SPAN = 8;
 
-  // Style header row
-  ws.getRow(1).eachCell((cell) => {
-    Object.assign(cell, { style: headerStyle });
+  addBrandBanner({
+    wb,
+    sheet: ws,
+    title: "Colaboradores",
+    subtitle: `${data.collaborators.length} colaborador(es)`,
+    colSpan: SPAN,
   });
-  ws.getRow(1).height = 28;
+  ws.addRow([]); // spacer
 
-  // Add data
+  const headerRow = ws.addRow([
+    "Nombre",
+    "Email",
+    "Tipo",
+    "Estado",
+    "Partners",
+    "Roles",
+    "Fecha de registro",
+    "Última actividad",
+  ]);
+  styleHeaderRow(ws, headerRow.number, SPAN);
+
+  let zebra = false;
   for (const c of data.collaborators) {
-    ws.addRow({
-      name: c.name,
-      email: c.email ?? "—",
-      userType: c.userType === "system_user" ? "Sistema" : "Virtual",
-      status: c.isActive ? "Activo" : "Inactivo",
-      partners: c.partners || "Sin asignar",
-      roles: c.roles || "—",
-      createdAt: new Date(c.createdAt).toLocaleDateString("es-MX"),
-      lastActivity: c.lastActivity
+    const row = ws.addRow([
+      c.name,
+      c.email ?? "—",
+      c.userType === "system_user" ? "Sistema" : "Virtual",
+      c.isActive ? "Activo" : "Inactivo",
+      c.partners || "Sin asignar",
+      c.roles || "—",
+      new Date(c.createdAt).toLocaleDateString("es-MX"),
+      c.lastActivity
         ? new Date(c.lastActivity).toLocaleDateString("es-MX")
         : "—",
-    });
+    ]);
+    const bg = zebra ? XLS.paper : XLS.white;
+    for (let col = 1; col <= SPAN; col++) {
+      const cell = row.getCell(col);
+      cell.fill = fill(bg);
+      cell.border = thinBorder;
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    }
+    zebra = !zebra;
   }
 
-  // Alternate row colors
-  ws.eachRow((row, i) => {
-    if (i > 1 && i % 2 === 0) {
-      row.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFF9FAFB" },
-        };
-      });
-    }
-  });
+  ws.autoFilter = `A${headerRow.number}:H${headerRow.number}`;
+  ws.addRow([]);
+  addBrandFooter(ws, `BoxBuild · Generado el ${generatedAt}`, SPAN);
 
-  // Auto-filter
-  ws.autoFilter = { from: "A1", to: "H1" };
+  applyBodyFontDefault(ws);
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);

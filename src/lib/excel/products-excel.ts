@@ -1,4 +1,13 @@
 import ExcelJS from "exceljs";
+import { XLS } from "@/lib/brand/theme";
+import {
+  addBrandBanner,
+  styleHeaderRow,
+  fill,
+  thinBorder,
+  addBrandFooter,
+  applyBodyFontDefault,
+} from "@/lib/brand/excel-brand";
 
 interface ProductExcelData {
   products: {
@@ -12,15 +21,6 @@ interface ProductExcelData {
     createdAt: string;
   }[];
 }
-
-const headerStyle: Partial<ExcelJS.Style> = {
-  font: { bold: true, color: { argb: "FFFFFFFF" }, size: 11 },
-  fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF3B82F6" } },
-  alignment: { horizontal: "center", vertical: "middle" },
-  border: {
-    bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
-  },
-};
 
 const lifecycleLabels: Record<string, string> = {
   active: "Activo",
@@ -36,53 +36,76 @@ export async function generateProductsExcel(
   const wb = new ExcelJS.Workbook();
   wb.creator = "BoxBuild";
 
-  const ws = wb.addWorksheet("Productos");
+  const generatedAt = new Date().toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
+  const ws = wb.addWorksheet("Productos", {
+    views: [{ showGridLines: false, state: "frozen", ySplit: 4 }],
+  });
 
   ws.columns = [
-    { header: "Producto", key: "name", width: 30 },
-    { header: "Tipo", key: "productType", width: 18 },
-    { header: "Categoria", key: "category", width: 18 },
-    { header: "Partner", key: "partner", width: 22 },
-    { header: "Estado", key: "status", width: 12 },
-    { header: "Ciclo de vida", key: "lifecycle", width: 16 },
-    { header: "Colaboradores", key: "collaborators", width: 35 },
-    { header: "Fecha de creacion", key: "createdAt", width: 18 },
+    { key: "name", width: 30 },
+    { key: "productType", width: 18 },
+    { key: "category", width: 18 },
+    { key: "partner", width: 22 },
+    { key: "status", width: 12 },
+    { key: "lifecycle", width: 16 },
+    { key: "collaborators", width: 35 },
+    { key: "createdAt", width: 18 },
   ];
+  const SPAN = 8;
 
-  // Style header row
-  ws.getRow(1).eachCell((cell) => {
-    Object.assign(cell, { style: headerStyle });
+  addBrandBanner({
+    wb,
+    sheet: ws,
+    title: "Productos",
+    subtitle: `${data.products.length} producto(s)`,
+    colSpan: SPAN,
   });
-  ws.getRow(1).height = 28;
+  ws.addRow([]); // spacer
 
-  // Add data
+  const headerRow = ws.addRow([
+    "Producto",
+    "Tipo",
+    "Categoría",
+    "Partner",
+    "Estado",
+    "Ciclo de vida",
+    "Colaboradores",
+    "Fecha de creación",
+  ]);
+  styleHeaderRow(ws, headerRow.number, SPAN);
+
+  let zebra = false;
   for (const p of data.products) {
-    ws.addRow({
-      name: p.name,
-      productType: p.productType,
-      category: p.category ?? "—",
-      partner: p.partner,
-      status: p.isActive ? "Activo" : "Inactivo",
-      lifecycle: lifecycleLabels[p.lifecycleStatus ?? ""] ?? p.lifecycleStatus ?? "—",
-      collaborators: p.collaborators || "Sin asignar",
-      createdAt: new Date(p.createdAt).toLocaleDateString("es-MX"),
-    });
+    const row = ws.addRow([
+      p.name,
+      p.productType,
+      p.category ?? "—",
+      p.partner,
+      p.isActive ? "Activo" : "Inactivo",
+      lifecycleLabels[p.lifecycleStatus ?? ""] ?? p.lifecycleStatus ?? "—",
+      p.collaborators || "Sin asignar",
+      new Date(p.createdAt).toLocaleDateString("es-MX"),
+    ]);
+    const bg = zebra ? XLS.paper : XLS.white;
+    for (let c = 1; c <= SPAN; c++) {
+      const cell = row.getCell(c);
+      cell.fill = fill(bg);
+      cell.border = thinBorder;
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    }
+    zebra = !zebra;
   }
 
-  // Alternate row colors
-  ws.eachRow((row, i) => {
-    if (i > 1 && i % 2 === 0) {
-      row.eachCell((cell) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFF9FAFB" },
-        };
-      });
-    }
-  });
+  ws.autoFilter = `A${headerRow.number}:H${headerRow.number}`;
+  ws.addRow([]);
+  addBrandFooter(ws, `BoxBuild · Generado el ${generatedAt}`, SPAN);
 
-  ws.autoFilter = { from: "A1", to: "H1" };
+  applyBodyFontDefault(ws);
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);

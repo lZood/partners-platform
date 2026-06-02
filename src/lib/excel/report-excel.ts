@@ -1,4 +1,14 @@
 import ExcelJS from "exceljs";
+import { XLS, NUM_FMT } from "@/lib/brand/theme";
+import {
+  addBrandBanner,
+  styleHeaderRow,
+  fill,
+  thinBorder,
+  titleFont,
+  addBrandFooter,
+  applyBodyFontDefault,
+} from "@/lib/brand/excel-brand";
 
 interface ReportExcelData {
   reportMonth: string;
@@ -30,35 +40,24 @@ interface ReportExcelData {
   }[];
 }
 
-// ── Brand palette ──────────────────────────────────────────────
+// ── Brand palette (BoxBuild) ───────────────────────────────────
+// Dark ink dominates; the blue accent marks important figures only.
 const COLORS = {
-  brand: "FF1E3A8A", // deep blue (banner)
-  brandLight: "FF3B82F6", // blue (table headers)
-  accent: "FF0EA5E9", // sky (section headers)
-  totalRow: "FFDBEAFE", // light blue (subtotals)
-  grandTotal: "FF1E3A8A", // deep blue (grand total)
-  zebra: "FFF1F5F9", // slate-100 (alt rows)
-  white: "FFFFFFFF",
-  textDark: "FF1F2937",
-  muted: "FF6B7280",
-  border: "FFE5E7EB",
-  positive: "FF059669", // green
-  negative: "FFDC2626", // red
+  ink: XLS.ink, // banner, grand total, body emphasis
+  graphite: XLS.graphite, // table / column headers
+  accent: XLS.accent, // the single accent — important rules only
+  totalRow: XLS.accentTint, // subtotal highlight
+  zebra: XLS.paper, // alternating rows
+  white: XLS.white,
+  textDark: XLS.ink,
+  muted: XLS.muted,
+  border: XLS.line,
+  positive: XLS.ink, // no green — positives in plain ink
+  negative: XLS.negative, // semantic only
 };
 
-const currencyFormat = '"$"#,##0.00';
-const pctFormat = "0.0%";
-
-const thinBorder: Partial<ExcelJS.Borders> = {
-  top: { style: "thin", color: { argb: COLORS.border } },
-  left: { style: "thin", color: { argb: COLORS.border } },
-  bottom: { style: "thin", color: { argb: COLORS.border } },
-  right: { style: "thin", color: { argb: COLORS.border } },
-};
-
-function fill(argb: string): ExcelJS.Fill {
-  return { type: "pattern", pattern: "solid", fgColor: { argb } };
-}
+const currencyFormat = NUM_FMT.usd;
+const pctFormat = NUM_FMT.pct;
 
 function formatMonth(month: string): string {
   // expects "YYYY-MM"
@@ -72,50 +71,16 @@ function formatMonth(month: string): string {
   return `${months[idx]} ${y}`;
 }
 
-/** Paint a branded banner across the given number of columns on `sheet`. */
-function addBanner(
-  sheet: ExcelJS.Worksheet,
-  title: string,
-  subtitle: string,
-  colSpan: number
-) {
-  // Title row
-  sheet.mergeCells(1, 1, 1, colSpan);
-  const titleCell = sheet.getCell(1, 1);
-  titleCell.value = title;
-  titleCell.font = { bold: true, size: 18, color: { argb: COLORS.white } };
-  titleCell.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
-  titleCell.fill = fill(COLORS.brand);
-  sheet.getRow(1).height = 34;
-
-  // Subtitle row
-  sheet.mergeCells(2, 1, 2, colSpan);
-  const subCell = sheet.getCell(2, 1);
-  subCell.value = subtitle;
-  subCell.font = { size: 11, color: { argb: COLORS.white }, italic: true };
-  subCell.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
-  subCell.fill = fill(COLORS.brandLight);
-  sheet.getRow(2).height = 20;
-}
-
-/** Style a header row (1-based index) with the brand table-header look. */
-function styleHeaderRow(sheet: ExcelJS.Worksheet, rowIdx: number, colSpan: number) {
-  const row = sheet.getRow(rowIdx);
-  row.height = 22;
-  for (let c = 1; c <= colSpan; c++) {
-    const cell = row.getCell(c);
-    cell.font = { bold: true, color: { argb: COLORS.white }, size: 11 };
-    cell.fill = fill(COLORS.brandLight);
-    cell.alignment = { horizontal: "center", vertical: "middle" };
-    cell.border = thinBorder;
-  }
-}
-
 export async function generateReportExcel(data: ReportExcelData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "BoxBuild";
   wb.created = new Date(0); // deterministic; avoids Date.now usage concerns
   const periodLabel = formatMonth(data.reportMonth);
+  const generatedAt = new Date().toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
 
   // ════════════════════════════════════════════════════════════
   // Sheet 1 · Resumen
@@ -131,16 +96,17 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     { width: 4 },
   ];
 
-  addBanner(
-    summary,
-    "Reporte de Ganancias",
-    `${data.partnerName}  ·  ${periodLabel}`,
-    4
-  );
+  addBrandBanner({
+    wb,
+    sheet: summary,
+    title: "Reporte de Ganancias",
+    subtitle: `${data.partnerName}  ·  ${periodLabel}`,
+    colSpan: 4,
+  });
 
   let r = 4;
   const statusLabel = data.isLocked ? "Bloqueado" : "Borrador";
-  const statusColor = data.isLocked ? COLORS.positive : COLORS.muted;
+  const statusColor = data.isLocked ? COLORS.accent : COLORS.muted;
 
   const metaRows: [string, string | number][] = [
     ["Partner", data.partnerName],
@@ -181,7 +147,7 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     const head = summary.getCell(r, 2);
     head.value = label;
     head.font = { bold: true, size: 11, color: { argb: COLORS.white } };
-    head.fill = fill(COLORS.accent);
+    head.fill = fill(COLORS.ink);
     head.alignment = { horizontal: "center", vertical: "middle" };
     summary.getRow(r).height = 18;
 
@@ -189,7 +155,7 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     const body = summary.getCell(r + 1, 2);
     body.value = value;
     body.numFmt = fmt;
-    body.font = { bold: true, size: 20, color: { argb: COLORS.brand } };
+    body.font = { bold: true, size: 20, color: { argb: COLORS.ink } };
     body.alignment = { horizontal: "center", vertical: "middle" };
     body.fill = fill(COLORS.white);
     body.border = {
@@ -219,12 +185,13 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
   detail.columns = detailCols;
   const DETAIL_SPAN = 7;
 
-  addBanner(
-    detail,
-    "Detalle por Colaborador",
-    `${data.partnerName}  ·  ${periodLabel}`,
-    DETAIL_SPAN
-  );
+  addBrandBanner({
+    wb,
+    sheet: detail,
+    title: "Detalle por Colaborador",
+    subtitle: `${data.partnerName}  ·  ${periodLabel}`,
+    colSpan: DETAIL_SPAN,
+  });
 
   // Header row (row 4)
   const detHeaders = ["Producto", "%", "Bruto USD", "Post-Tax USD", "Neto USD", "Neto MXN"];
@@ -239,12 +206,12 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
 
   let dr = 5;
   for (const u of data.users) {
-    // Collaborator section header
+    // Collaborator section header (Anek Latin, ink band)
     detail.mergeCells(dr, 1, dr, DETAIL_SPAN);
     const sec = detail.getCell(dr, 1);
     sec.value = `  ${u.userName}`;
-    sec.font = { bold: true, size: 12, color: { argb: COLORS.white } };
-    sec.fill = fill(COLORS.accent);
+    sec.font = titleFont({ bold: true, size: 12, color: { argb: COLORS.white } });
+    sec.fill = fill(COLORS.ink);
     sec.alignment = { vertical: "middle" };
     detail.getRow(dr).height = 22;
     dr++;
@@ -281,7 +248,7 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     for (const adj of u.adjustments) {
       const row = detail.getRow(dr);
       const isDeduction = adj.amountUsd < 0;
-      row.getCell(2).value = `  ↳ Ajuste: ${adj.description}`;
+      row.getCell(2).value = `  • Ajuste: ${adj.description}`;
       row.getCell(6).value = adj.amountUsd;
       row.getCell(6).numFmt = currencyFormat;
       for (let c = 2; c <= DETAIL_SPAN; c++) {
@@ -289,8 +256,7 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
         cell.fill = fill(COLORS.white);
         cell.border = thinBorder;
         cell.font = {
-          italic: true,
-          color: { argb: isDeduction ? COLORS.negative : COLORS.positive },
+          color: { argb: isDeduction ? COLORS.negative : COLORS.muted },
         };
         cell.alignment = {
           vertical: "middle",
@@ -312,10 +278,10 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     for (let c = 1; c <= DETAIL_SPAN; c++) {
       const cell = tr.getCell(c);
       cell.fill = fill(COLORS.totalRow);
-      cell.font = { bold: true, color: { argb: COLORS.brand } };
+      cell.font = { bold: true, color: { argb: COLORS.ink } };
       cell.border = {
-        top: { style: "thin", color: { argb: COLORS.brandLight } },
-        bottom: { style: "thin", color: { argb: COLORS.brandLight } },
+        top: { style: "thin", color: { argb: COLORS.accent } },
+        bottom: { style: "thin", color: { argb: COLORS.accent } },
       };
       cell.alignment = {
         vertical: "middle",
@@ -336,7 +302,7 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
   gr.getCell(7).numFmt = currencyFormat;
   for (let c = 1; c <= DETAIL_SPAN; c++) {
     const cell = gr.getCell(c);
-    cell.fill = fill(COLORS.grandTotal);
+    cell.fill = fill(COLORS.ink);
     cell.font = { bold: true, size: 12, color: { argb: COLORS.white } };
     cell.alignment = {
       vertical: "middle",
@@ -361,12 +327,13 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
   ];
   const ADJ_SPAN = 5;
 
-  addBanner(
-    adjSheet,
-    "Ajustes Aplicados",
-    `${data.partnerName}  ·  ${periodLabel}`,
-    ADJ_SPAN
-  );
+  addBrandBanner({
+    wb,
+    sheet: adjSheet,
+    title: "Ajustes Aplicados",
+    subtitle: `${data.partnerName}  ·  ${periodLabel}`,
+    colSpan: ADJ_SPAN,
+  });
 
   const adjHeaders = ["Colaborador", "Tipo", "Descripción", "Monto USD"];
   const adjHeaderRow = adjSheet.getRow(4);
@@ -423,6 +390,20 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     empty.fill = fill(COLORS.zebra);
     adjSheet.getRow(5).height = 24;
   }
+
+  // Brand footer on every sheet (consistent with the other exports).
+  const footer = `BoxBuild · Generado el ${generatedAt}`;
+  summary.addRow([]);
+  addBrandFooter(summary, footer, 4);
+  detail.addRow([]);
+  addBrandFooter(detail, footer, DETAIL_SPAN);
+  adjSheet.addRow([]);
+  addBrandFooter(adjSheet, footer, ADJ_SPAN);
+
+  // Apply Sora to any data cell that didn't get an explicit brand font.
+  applyBodyFontDefault(summary);
+  applyBodyFontDefault(detail);
+  applyBodyFontDefault(adjSheet);
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);

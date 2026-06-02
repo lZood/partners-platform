@@ -2,6 +2,8 @@ import PDFDocument from "pdfkit";
 import path from "path";
 import fs from "fs";
 import { formatUSD, formatMXN, formatPercentage, formatMonth } from "@/lib/utils";
+import { PDF as C } from "@/lib/brand/theme";
+import { registerBrandFonts } from "@/lib/brand/pdf-fonts";
 
 const BRAND_LOGO_DARK_PATH = path.join(
   process.cwd(),
@@ -48,23 +50,6 @@ export interface ReportPDFData {
   grandTotalMxn: number;
 }
 
-// ── Brand palette ──────────────────────────────────────────────
-const C = {
-  brand: "#1E3A8A", // deep blue
-  brandLight: "#3B82F6", // blue
-  accent: "#0EA5E9", // sky
-  totalRow: "#DBEAFE", // light blue
-  zebra: "#F1F5F9", // slate-100
-  cardBg: "#F8FAFC",
-  white: "#FFFFFF",
-  text: "#1F2937",
-  muted: "#6B7280",
-  line: "#E5E7EB",
-  positive: "#059669",
-  negative: "#DC2626",
-  amber: "#D97706",
-};
-
 // Letter geometry
 const PAGE_W = 612;
 const PAGE_H = 792;
@@ -99,6 +84,9 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       bufferPages: true,
     });
 
+    // Brand typefaces (Anek Latin / Sora) — falls back to Helvetica if absent.
+    const F = registerBrandFonts(doc);
+
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
@@ -123,9 +111,9 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         doc.restore();
       }
       doc
-        .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+        .font(opts.bold ? F.bodyBold : F.body)
         .fontSize(opts.size ?? 8.5)
-        .fillColor(opts.color ?? C.text);
+        .fillColor(opts.color ?? C.ink);
 
       let x = M.left;
       COLS.forEach((col, i) => {
@@ -149,7 +137,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       });
     };
 
-    const hLine = (y: number, color = C.line, width = 0.5) => {
+    const hLine = (y: number, color: string = C.line, width = 0.5) => {
       doc
         .save()
         .moveTo(M.left, y)
@@ -163,9 +151,9 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     /** Draw the table column header at y; return y below it. */
     const drawTableHeader = (y: number): number => {
       doc.save();
-      doc.rect(M.left, y, CONTENT_W, HEADER_H).fill(C.brandLight);
+      doc.rect(M.left, y, CONTENT_W, HEADER_H).fill(C.graphite);
       doc.restore();
-      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(C.white);
+      doc.font(F.bodyBold).fontSize(8.5).fillColor(C.white);
       let x = M.left;
       COLS.forEach((col) => {
         const textY = y + (HEADER_H - 8.5) / 2 - 1;
@@ -201,19 +189,19 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     // ════════════════════════════════════════════════════════════
     const bannerH = 76;
     doc.save();
-    doc.rect(0, 0, PAGE_W, bannerH + M.top - 10).fill(C.brand);
+    doc.rect(0, 0, PAGE_W, bannerH + M.top - 10).fill(C.ink);
     doc.restore();
 
     doc
-      .font("Helvetica-Bold")
+      .font(F.display)
       .fontSize(22)
       .fillColor(C.white)
       .text("Reporte de Ganancias", M.left, 28, { lineBreak: false });
 
     doc
-      .font("Helvetica")
+      .font(F.body)
       .fontSize(11)
-      .fillColor("#DBEAFE")
+      .fillColor(C.onDarkMuted)
       .text(
         `${data.partnerName}  ·  ${formatMonth(data.reportMonth)}`,
         M.left,
@@ -222,9 +210,9 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       );
 
     doc
-      .font("Helvetica")
+      .font(F.body)
       .fontSize(9)
-      .fillColor("#BFDBFE")
+      .fillColor(C.onDarkMuted)
       .text(
         `Tipo de cambio: $${data.exchangeRate.toFixed(4)} MXN/USD`,
         M.left,
@@ -232,10 +220,10 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         { lineBreak: false }
       );
 
-    // Status pill (top-right)
+    // Status pill (top-right). Locked → brand accent; draft → muted gray.
     const statusText = data.isLocked ? "CONGELADO" : "BORRADOR";
-    const pillColor = data.isLocked ? C.positive : C.amber;
-    doc.font("Helvetica-Bold").fontSize(8.5);
+    const pillColor = data.isLocked ? C.accent : C.muted;
+    doc.font(F.bodyBold).fontSize(8.5);
     const pillTextW = doc.widthOfString(statusText);
     const pillW = pillTextW + 22;
     const pillH = 18;
@@ -294,30 +282,30 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     cards.forEach((card, i) => {
       const cx = M.left + i * (cardW + gap);
       doc.save();
-      doc.roundedRect(cx, y, cardW, cardH, 6).fill(card.emphasize ? C.brand : C.cardBg);
+      doc.roundedRect(cx, y, cardW, cardH, 6).fill(card.emphasize ? C.ink : C.paper);
       doc.restore();
       if (!card.emphasize) {
         doc.save();
         doc.roundedRect(cx, y, cardW, cardH, 6).lineWidth(0.7).strokeColor(C.line).stroke();
         doc.restore();
       }
-      // accent strip
+      // accent strip — the single brand accent, marking the figure
       doc.save();
-      doc.rect(cx, y + 6, 3, cardH - 12).fill(card.emphasize ? C.accent : C.brandLight);
+      doc.rect(cx, y + 6, 3, cardH - 12).fill(C.accent);
       doc.restore();
 
       doc
-        .font("Helvetica-Bold")
+        .font(F.bodyBold)
         .fontSize(7)
-        .fillColor(card.emphasize ? "#BFDBFE" : C.muted)
+        .fillColor(card.emphasize ? C.onDarkMuted : C.muted)
         .text(card.label, cx + 10, y + 9, {
           width: cardW - 14,
           lineBreak: false,
         });
       doc
-        .font("Helvetica-Bold")
+        .font(F.bodyBold)
         .fontSize(12.5)
-        .fillColor(card.emphasize ? C.white : C.brand)
+        .fillColor(card.emphasize ? C.white : C.ink)
         .text(card.value, cx + 10, y + 25, {
           width: cardW - 14,
           lineBreak: false,
@@ -336,10 +324,10 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
 
       // Collaborator name bar
       doc.save();
-      doc.roundedRect(M.left, y, CONTENT_W, 22, 4).fill(C.accent);
+      doc.roundedRect(M.left, y, CONTENT_W, 22, 4).fill(C.ink);
       doc.restore();
       doc
-        .font("Helvetica-Bold")
+        .font(F.heading)
         .fontSize(11)
         .fillColor(C.white)
         .text(user.userName, M.left + 10, y + 6, {
@@ -370,7 +358,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
             formatUSD(item.finalUsd),
             formatMXN(item.finalMxn),
           ],
-          { bg: zebra ? C.zebra : C.white }
+          { bg: zebra ? C.paper : C.white }
         );
         y += ROW_H;
         zebra = !zebra;
@@ -399,10 +387,10 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
           doc.rect(M.left, y, CONTENT_W, ROW_H).fill(C.white);
           doc.restore();
           doc
-            .font("Helvetica-Oblique")
+            .font(F.body)
             .fontSize(8)
-            .fillColor(isNeg ? C.negative : C.positive)
-            .text(`↳ ${adjType}: ${adj.description}`, M.left + PAD + 6, y + 4, {
+            .fillColor(isNeg ? C.negative : C.muted)
+            .text(`• ${adjType}: ${adj.description}`, M.left + PAD + 6, y + 4, {
               width: COLS[0].w + COLS[1].w + COLS[2].w + COLS[3].w - PAD,
               lineBreak: false,
               ellipsis: true,
@@ -425,7 +413,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         y = M.top;
         y = drawTableHeader(y);
       }
-      hLine(y + 1, C.brandLight, 1);
+      hLine(y + 1, C.accent, 1);
       drawRow(
         y + 2,
         [
@@ -436,7 +424,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
           formatUSD(user.totalFinalUsd),
           formatMXN(user.totalFinalMxn),
         ],
-        { bold: true, bg: C.totalRow, color: C.brand, height: ROW_H + 2 }
+        { bold: true, bg: C.accentTint, color: C.ink, height: ROW_H + 2 }
       );
       y += ROW_H + 2;
 
@@ -449,10 +437,14 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     y = ensureSpace(y, 40);
     const bandH = 30;
     doc.save();
-    doc.roundedRect(M.left, y, CONTENT_W, bandH, 5).fill(C.brand);
+    doc.roundedRect(M.left, y, CONTENT_W, bandH, 5).fill(C.ink);
+    doc.restore();
+    // Accent strip marks this as the document's most important figure.
+    doc.save();
+    doc.rect(M.left, y + 5, 3, bandH - 10).fill(C.accent);
     doc.restore();
     doc
-      .font("Helvetica-Bold")
+      .font(F.heading)
       .fontSize(12)
       .fillColor(C.white)
       .text("GRAN TOTAL", M.left + 14, y + (bandH - 12) / 2 - 1, {
@@ -462,7 +454,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
     const gtText = `${formatUSD(data.grandTotalUsd)}   |   ${formatMXN(
       data.grandTotalMxn
     )}`;
-    doc.text(gtText, M.left, y + (bandH - 12) / 2 - 1, {
+    doc.font(F.bodyBold).text(gtText, M.left, y + (bandH - 12) / 2 - 1, {
       width: CONTENT_W - 14,
       align: "right",
       lineBreak: false,
@@ -489,7 +481,7 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
         .stroke()
         .restore();
       doc
-        .font("Helvetica")
+        .font(F.body)
         .fontSize(7.5)
         .fillColor(C.muted)
         .text(
