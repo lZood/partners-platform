@@ -1,9 +1,6 @@
 "use client";
 
-// Disable static prerender — page reads search params at request time.
-export const dynamic = "force-dynamic";
-
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
@@ -45,7 +42,7 @@ type State = "idle" | "verifying" | "error";
  *   - type:       'recovery' | 'invite' | 'magiclink' | 'email' | 'email_change'
  *   - next:       app path to redirect to after success (default: /)
  */
-export default function ConfirmPage() {
+function ConfirmContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tokenHash = searchParams.get("token_hash");
@@ -200,5 +197,30 @@ export default function ConfirmPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Page entry point: wraps ConfirmContent in <Suspense> so useSearchParams
+ * (which suspends during prerender) does not break the static build.
+ */
+export default function ConfirmPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-muted/50 px-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <CircleNotch className="h-6 w-6 animate-spin" />
+              </div>
+              <CardTitle className="text-2xl">Cargando...</CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+      }
+    >
+      <ConfirmContent />
+    </Suspense>
   );
 }
