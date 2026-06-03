@@ -151,7 +151,6 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: "distribution", label: "Distribucion", adminOnly: true, defaultVisible: true },
   { key: "lifecycle", label: "Lifecycle", adminOnly: true, defaultVisible: false },
   { key: "status", label: "Estado", adminOnly: true, defaultVisible: true },
-  { key: "partner", label: "Partner", adminOnly: false, defaultVisible: false },
   { key: "actions", label: "Acciones", adminOnly: true, defaultVisible: true },
 ];
 
@@ -197,7 +196,6 @@ export function ProductsClient({
 
   // Search & filters
   const [search, setSearch] = useState("");
-  const [filterPartner, setFilterPartner] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterDistribution, setFilterDistribution] = useState<string>("");
@@ -244,7 +242,7 @@ export function ProductsClient({
     ? ALL_COLUMNS
     : ALL_COLUMNS.filter((c) => !c.adminOnly);
 
-  const hasFilters = search || filterPartner || filterType || filterStatus || filterDistribution;
+  const hasFilters = search || filterType || filterStatus || filterDistribution;
 
   // Filtered & sorted products
   const filtered = useMemo(() => {
@@ -257,7 +255,6 @@ export function ProductsClient({
         (p.description ?? "").toLowerCase().includes(q)
       );
     }
-    if (filterPartner) list = list.filter((p) => p.partner_id === filterPartner);
     if (filterType) list = list.filter((p) => p.product_type_id === filterType);
     if (filterStatus === "active") list = list.filter((p) => p.is_active);
     if (filterStatus === "inactive") list = list.filter((p) => !p.is_active);
@@ -279,14 +276,14 @@ export function ProductsClient({
       return sortDir === "desc" ? -cmp : cmp;
     });
     return list;
-  }, [initialProducts, search, filterPartner, filterType, filterStatus, filterDistribution, sortField, sortDir, revenueSummaries]);
+  }, [initialProducts, search, filterType, filterStatus, filterDistribution, sortField, sortDir, revenueSummaries]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortField(field); setSortDir(field === "revenue" ? "desc" : "asc"); }
   };
 
-  const clearFilters = () => { setSearch(""); setFilterPartner(""); setFilterType(""); setFilterStatus(""); setFilterDistribution(""); };
+  const clearFilters = () => { setSearch(""); setFilterType(""); setFilterStatus(""); setFilterDistribution(""); };
 
   const totalRevenue = Object.values(revenueSummaries).reduce((sum, r) => sum + (r?.totalGrossUsd ?? 0), 0);
   const configuredCount = initialProducts.filter((p: any) => p.isDistributionValid).length;
@@ -482,21 +479,6 @@ export function ProductsClient({
           <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." className="pl-9 w-48 h-9 bg-card border-0 shadow-sm" />
         </div>
-
-        {partners.length > 1 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Partner:</span>
-            <Select value={filterPartner || "all"} onValueChange={(v) => setFilterPartner(v === "all" ? "" : v)}>
-              <SelectTrigger className="h-8 w-[140px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {partners.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
 
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Tipo:</span>
@@ -835,7 +817,6 @@ export function ProductsClient({
                       </th>
                     )}
                     {isColVisible("lifecycle") && <th className="p-3 font-medium text-muted-foreground">Lifecycle</th>}
-                    {isColVisible("partner") && <th className="p-3 font-medium text-muted-foreground">Partner</th>}
                     {isColVisible("status") && (
                       <th className="p-3 font-medium text-muted-foreground">
                         <button onClick={() => toggleSort("status")} className="flex items-center gap-1">Estado <SortIcon field="status" sortField={sortField} sortDir={sortDir} /></button>
@@ -924,9 +905,6 @@ export function ProductsClient({
                         )}
                         {isColVisible("lifecycle") && (
                           <td className="p-3"><Badge variant={lifecycle.variant} className="text-[10px]">{lifecycle.label}</Badge></td>
-                        )}
-                        {isColVisible("partner") && (
-                          <td className="p-3 text-xs text-muted-foreground">{product.partners?.name ?? "—"}</td>
                         )}
                         {isColVisible("status") && (
                           <td className="p-3">
