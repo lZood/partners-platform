@@ -340,7 +340,7 @@ export function UploadClient({
     allMatched && conflictChecked && (!existingReport || replaceConfirmed);
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-5xl space-y-6">
       <div>
         <Link
           href="/reports"
@@ -517,7 +517,7 @@ export function UploadClient({
                 Advertencias ({parseErrors.length}):
               </p>
               {parseErrors.slice(0, 5).map((err, i) => (
-                <p key={i} className="text-xs text-amber-700">
+                <p key={i} className="text-xs text-amber-700 dark:text-amber-300/90">
                   {err}
                 </p>
               ))}
@@ -709,7 +709,11 @@ export function UploadClient({
       {/* ── Step 4: Product Matching Result ───────────────────────── */}
       {matchResults.length > 0 && (
         <Card
-          className={allMatched ? "border-green-200" : "border-amber-200"}
+          className={
+            allMatched
+              ? "border-green-200 dark:border-green-900"
+              : "border-amber-200 dark:border-amber-900"
+          }
         >
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -722,12 +726,12 @@ export function UploadClient({
             </CardTitle>
             <CardDescription>
               {allMatched ? (
-                <span className="text-green-700">
+                <span className="text-green-700 dark:text-green-400">
                   Los {matchedProducts.length} productos del CSV coinciden con
                   productos en la base de datos.
                 </span>
               ) : (
-                <span className="text-amber-700">
+                <span className="text-amber-700 dark:text-amber-400">
                   {unmatchedProducts.length} de {matchResults.length}{" "}
                   producto(s) no estan registrados. Registralos antes de
                   continuar.
@@ -738,13 +742,13 @@ export function UploadClient({
           {!allMatched && (
             <CardContent>
               <div className="space-y-4">
-                <div className="rounded-md border border-amber-200 bg-amber-50/50 overflow-hidden">
-                  <div className="px-4 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700">
+                <div className="rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 overflow-hidden">
+                  <div className="px-4 py-2 bg-amber-100/50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800">
                     <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
                       Productos por registrar ({unmatchedProducts.length})
                     </p>
                   </div>
-                  <div className="divide-y divide-amber-100">
+                  <div className="grid grid-cols-1 gap-px bg-amber-100 dark:bg-amber-900/40 sm:grid-cols-2 lg:grid-cols-3">
                     {unmatchedProducts.map((p) => {
                       const product = products.find(
                         (pr) =>
@@ -754,25 +758,25 @@ export function UploadClient({
                       return (
                         <div
                           key={p.productName}
-                          className="px-4 py-2 flex items-center justify-between"
+                          className="flex items-center justify-between gap-2 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-2"
                         >
-                          <div>
-                            <span className="font-medium text-sm">
+                          <div className="min-w-0 flex items-center gap-2">
+                            <span className="truncate font-medium text-sm">
                               {p.productName}
                             </span>
                             {p.productType && (
                               <Badge
                                 variant="outline"
-                                className="ml-2 text-xs"
+                                className="shrink-0 text-xs"
                               >
                                 {p.productType}
                               </Badge>
                             )}
                           </div>
                           {product && (
-                            <span className="text-xs text-muted-foreground tabular-nums">
+                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                               {formatUSD(product.totalUsd)} ·{" "}
-                              {product.transactionCount} ventas
+                              {product.transactionCount}
                             </span>
                           )}
                         </div>
@@ -820,11 +824,11 @@ export function UploadClient({
             conflictChecked
               ? existingReport
                 ? existingReport.isLocked
-                  ? "border-red-300"
+                  ? "border-red-300 dark:border-red-900"
                   : replaceConfirmed
-                    ? "border-amber-200"
-                    : "border-amber-300"
-                : "border-green-200"
+                    ? "border-amber-200 dark:border-amber-900"
+                    : "border-amber-300 dark:border-amber-800"
+                : "border-green-200 dark:border-green-900"
               : ""
           }
         >
@@ -873,7 +877,7 @@ export function UploadClient({
           {/* No conflict — all clear */}
           {conflictChecked && !existingReport && (
             <CardContent>
-              <div className="flex items-center gap-2 text-green-700">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
                 <CheckCircle className="h-5 w-5" />
                 <p className="text-sm font-medium">
                   No se encontro un reporte previo para{" "}
@@ -888,7 +892,7 @@ export function UploadClient({
           {conflictChecked && existingReport?.isLocked && (
             <CardContent>
               <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-red-800">
+                <div className="flex items-center gap-2 text-red-800 dark:text-red-300">
                   <Lock className="h-5 w-5" />
                   <p className="font-medium">
                     El reporte de{" "}
@@ -898,12 +902,12 @@ export function UploadClient({
                     esta congelado
                   </p>
                 </div>
-                <p className="text-sm text-red-700">
+                <p className="text-sm text-red-700 dark:text-red-400">
                   No se puede reemplazar un reporte congelado. Para subir datos
                   nuevos, primero desbloquea el reporte desde la seccion de
                   Reportes.
                 </p>
-                <div className="text-xs text-red-600">
+                <div className="text-xs text-red-600 dark:text-red-400/80">
                   Congelado el: {formatDate(existingReport.lockedAt ?? "")}
                   {" · "}
                   Total: {formatUSD(existingReport.totalUsd)}
@@ -928,9 +932,9 @@ export function UploadClient({
               <CardContent>
                 <div className="space-y-4">
                   {/* Warning banner */}
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+                  <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
                     <div className="flex items-start gap-3">
-                      <Warning className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                      <Warning className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                       <div>
                         <p className="font-medium text-amber-800 dark:text-amber-200">
                           Ya existe un reporte para{" "}
@@ -938,7 +942,7 @@ export function UploadClient({
                             {formatMonth(existingReport.reportMonth)}
                           </span>
                         </p>
-                        <p className="text-sm text-amber-700 mt-1">
+                        <p className="text-sm text-amber-700 dark:text-amber-300/90 mt-1">
                           Si continuas, el reporte anterior sera reemplazado
                           completamente por los nuevos datos. Los ajustes
                           manuales que se hayan agregado se migraran al nuevo reporte.
@@ -1103,8 +1107,8 @@ export function UploadClient({
                               className={
                                 products.length >
                                 existingReport.productCount
-                                  ? "text-green-700"
-                                  : "text-red-700"
+                                  ? "text-green-700 dark:text-green-400"
+                                  : "text-red-700 dark:text-red-400"
                               }
                             >
                               {products.length >
@@ -1120,7 +1124,7 @@ export function UploadClient({
                             parseFloat(exchangeRate) -
                               existingReport.exchangeRate
                           ) > 0.00001 && (
-                            <p className="text-xs text-amber-700">
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
                               TC diferente: $
                               {existingReport.exchangeRate.toFixed(5)} → $
                               {parseFloat(exchangeRate).toFixed(5)}
@@ -1164,7 +1168,7 @@ export function UploadClient({
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-amber-700 pt-2">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 pt-2">
                       <CheckCircle className="h-4 w-4" />
                       <p className="text-sm font-medium">
                         Confirmado: el reporte anterior sera reemplazado al
@@ -1180,16 +1184,16 @@ export function UploadClient({
 
       {/* ── Step 6: Generate report ───────────────────────────────── */}
       {canGenerate && !result && (
-        <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30/30">
+        <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <p className="font-medium text-green-800">
+                <p className="font-medium text-green-800 dark:text-green-300">
                   {existingReport
                     ? "Listo para reemplazar el reporte"
                     : "Todo listo para generar el reporte"}
                 </p>
-                <p className="text-sm text-green-700">
+                <p className="text-sm text-green-700 dark:text-green-400">
                   {products.length} productos · {formatUSD(totalUsd)} bruto ·
                   TC ${parseFloat(exchangeRate || "0").toFixed(5)} MXN
                   {existingReport && " · Reemplazara el reporte existente"}
@@ -1228,9 +1232,9 @@ export function UploadClient({
 
       {/* ── Result ────────────────────────────────────────────────── */}
       {result && (
-        <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30/50">
+        <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-800">
+            <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-300">
               <CheckCircle className="h-5 w-5" />
               {existingReport
                 ? "Reporte Reemplazado Exitosamente"
@@ -1268,7 +1272,7 @@ export function UploadClient({
                   Productos omitidos ({result.skippedErrors.length}):
                 </p>
                 {result.skippedErrors.map((err: string, i: number) => (
-                  <p key={i} className="text-xs text-amber-700">
+                  <p key={i} className="text-xs text-amber-700 dark:text-amber-300/90">
                     {err}
                   </p>
                 ))}

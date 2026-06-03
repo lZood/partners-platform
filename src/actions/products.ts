@@ -336,27 +336,81 @@ export async function autoRegisterProducts(
   if (!user) return { success: false, error: "No autenticado" };
 
   // Get available product types
-  const { data: productTypes } = await supabase
+  const { data: existingTypes } = await supabase
     .from("product_types")
     .select("id, name")
     .order("name");
 
-  if (!productTypes || productTypes.length === 0) {
+  // Build type lookup (case-insensitive)
+  const typeMap = new Map<string, string>(
+    (existingTypes ?? []).map((pt: any) => [pt.name.toLowerCase().trim(), pt.id])
+  );
+
+  // Determine which types the CSV needs that don't exist yet, so we can create
+  // them on the fly instead of forcing the user to configure types manually.
+  const DEFAULT_TYPE_NAME = "General";
+  const missingNames = new Set<string>();
+  let needsDefault = false;
+  for (const p of products) {
+    const t = p.productType?.trim();
+    if (t) {
+      if (!typeMap.has(t.toLowerCase())) missingNames.add(t);
+    } else {
+      needsDefault = true;
+    }
+  }
+  // Guarantee a fallback type exists for products without a type in the CSV
+  // (and for the edge case where no types exist at all).
+  if (
+    (needsDefault || typeMap.size === 0) &&
+    !typeMap.has(DEFAULT_TYPE_NAME.toLowerCase())
+  ) {
+    missingNames.add(DEFAULT_TYPE_NAME);
+  }
+
+  // Create any missing types (idempotent against the UNIQUE(name) constraint).
+  if (missingNames.size > 0) {
+    const { error: typeErr } = await supabase
+      .from("product_types")
+      .upsert(
+        Array.from(missingNames, (name) => ({ name })),
+        { onConflict: "name", ignoreDuplicates: true }
+      );
+
+    if (typeErr) {
+      return {
+        success: false,
+        error: `Error creando tipos de producto: ${typeErr.message}`,
+      };
+    }
+
+    // Re-fetch so we have ids for the freshly created (and pre-existing) types.
+    const { data: allTypes, error: refetchErr } = await supabase
+      .from("product_types")
+      .select("id, name");
+    if (refetchErr) {
+      return { success: false, error: refetchErr.message };
+    }
+    typeMap.clear();
+    for (const pt of (allTypes ?? []) as any[]) {
+      typeMap.set(pt.name.toLowerCase().trim(), pt.id);
+    }
+  }
+
+  const defaultTypeId =
+    typeMap.get(DEFAULT_TYPE_NAME.toLowerCase()) ??
+    typeMap.values().next().value;
+
+  if (!defaultTypeId) {
     return {
       success: false,
-      error: "No hay tipos de producto configurados. Crea al menos uno primero.",
+      error: "No se pudo determinar un tipo de producto.",
     };
   }
 
-  // Build type lookup (case-insensitive)
-  const typeMap = new Map(
-    productTypes.map((pt: any) => [pt.name.toLowerCase().trim(), pt.id])
-  );
-  const defaultTypeId = productTypes[0].id;
-
   const toInsert = products.map((p) => {
-    const typeId =
-      typeMap.get(p.productType.toLowerCase().trim()) || defaultTypeId;
+    const t = p.productType?.trim().toLowerCase();
+    const typeId = (t && typeMap.get(t)) || defaultTypeId;
     return {
       name: p.productName,
       partner_id: partnerId,
@@ -375,6 +429,7 @@ export async function autoRegisterProducts(
   }
 
   revalidatePath("/products");
+  revalidatePath("/upload");
 
   return {
     success: true,
