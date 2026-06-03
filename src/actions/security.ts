@@ -11,16 +11,31 @@ import crypto from "crypto";
 type Result = { success: boolean; error?: string; data?: any };
 
 function getBaseUrl(): string {
+  // Use explicit env var if available (recommended for production)
   if (process.env.NEXT_PUBLIC_APP_URL) {
     return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   }
-  const h = headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "localhost:3000";
-  const protocol = h.get("x-forwarded-proto") || "http";
-  const origin = `${protocol}://${host}`;
-  return origin.replace("0.0.0.0", "localhost");
+  const headersList = headers();
+  const host = headersList.get("host") ?? "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") ?? "http";
+  return `${protocol}://${host}`;
 }
 
+// Wrap Supabase's raw verify URL in our /auth/confirm page so email-security
+// scanners (Gmail/Outlook/etc.) cannot pre-fetch and burn the one-time token.
+// See src/app/auth/confirm/page.tsx for full rationale.
+function wrapAuthLink(
+  hashedToken: string,
+  type: "recovery" | "invite" | "magiclink" | "email" | "email_change",
+  next: string
+): string {
+  const params = new URLSearchParams({
+    token_hash: hashedToken,
+    type,
+    next,
+  });
+  return `${getBaseUrl()}/auth/confirm?${params.toString()}`;
+}
 function generateRecoveryCodes(count: number = 8): string[] {
   const codes: string[] = [];
   for (let i = 0; i < count; i++) {
@@ -411,7 +426,7 @@ export async function requestPasswordReset(email: string): Promise<Result> {
   }
 
   // Send the email via our SMTP
-  const resetLink = linkData.properties.action_link;
+  const resetLink = wrapAuthLink(linkData.properties.hashed_token, "recovery", "/auth/set-password");
 
   const emailResult = await sendPasswordResetEmail({
     to: (appUser as any).email,

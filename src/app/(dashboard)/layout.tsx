@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Navbar } from "@/components/layout/navbar";
 import { SidebarShell } from "@/components/layout/sidebar-shell";
 import { MainContent } from "@/components/layout/main-content";
+import { OnboardingTrigger } from "@/components/onboarding/onboarding-trigger";
 import { getUnreadCount } from "@/actions/notifications";
 import { getActivePartnerContext } from "@/lib/active-partner";
 
@@ -65,6 +66,11 @@ export default async function DashboardLayout({
         canSwitchPartner={canSwitchPartner}
       />
       <MainContent>{children}</MainContent>
+      <OnboardingTrigger
+        userId={ctx.authUserId}
+        role={ctx.role}
+        userName={userName}
+      />
     </SidebarShell>
   );
 }

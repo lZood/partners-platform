@@ -23,10 +23,14 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { OnboardingReplayButton } from "@/components/onboarding/onboarding-replay-button";
+import type { OnboardingRole } from "@/components/onboarding/onboarding-dialog";
 import { cn } from "@/lib/utils";
 
 interface Props {
   userRole: string;
+  userId?: string;
+  userName?: string;
 }
 
 interface HelpSection {
@@ -429,7 +433,7 @@ const helpSections: HelpSection[] = [
   },
 ];
 
-export function HelpClient({ userRole }: Props) {
+export function HelpClient({ userRole, userId, userName }: Props) {
   const [search, setSearch] = useState("");
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [expandedArticle, setExpandedArticle] = useState<string | null>(null);
@@ -481,15 +485,24 @@ export function HelpClient({ userRole }: Props) {
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <BookOpen className="h-6 w-6 text-primary" />
-          Centro de Ayuda
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Guias y documentacion de la plataforma BoxBuild.
-          Viendo contenido para: <Badge variant="outline" className="ml-1">{roleLabel}</Badge>
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <BookOpen className="h-6 w-6 text-primary" />
+            Centro de Ayuda
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Guias y documentacion de la plataforma BoxBuild.
+            Viendo contenido para: <Badge variant="outline" className="ml-1">{roleLabel}</Badge>
+          </p>
+        </div>
+        {userId && (
+          <OnboardingReplayButton
+            userId={userId}
+            role={userRole as OnboardingRole}
+            userName={userName}
+          />
+        )}
       </div>
 
       {/* Search */}
