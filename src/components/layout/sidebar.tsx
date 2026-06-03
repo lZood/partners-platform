@@ -239,7 +239,12 @@ export function Sidebar({
             ) : (
               idx > 0 && <div className="mx-2 my-2 h-px bg-border" />
             )}
-            <div className="space-y-0.5">
+            <div
+              className={cn(
+                "space-y-0.5",
+                isCollapsed && "flex flex-col items-center"
+              )}
+            >
               {section.items.map((item) => {
                 const active = isItemActive(pathname, item.href);
                 return (

@@ -141,12 +141,21 @@ export async function generateReport(
   // 5. Process each CSV row
   const lineItems: any[] = [];
   const errors: string[] = [];
+  // Structured breakdown so the UI can render actionable error states
+  // instead of dumping a giant text blob.
+  const invalidDistribution: {
+    name: string;
+    productId: string | null;
+    distTotal: number;
+  }[] = [];
+  const notFound: string[] = [];
   let totalUsd = 0;
   let totalMxn = 0;
 
   for (const row of rows) {
     const product = productMap.get(row.productName.toLowerCase().trim());
     if (!product) {
+      notFound.push(row.productName);
       errors.push(`Producto "${row.productName}" no encontrado en la base de datos`);
       continue;
     }
@@ -158,6 +167,11 @@ export async function generateReport(
     );
 
     if (Math.abs(distTotal - 100) > 0.01) {
+      invalidDistribution.push({
+        name: product.name,
+        productId: product.id ?? null,
+        distTotal: Math.round(distTotal * 100) / 100,
+      });
       errors.push(
         `Producto "${row.productName}": distribucion suma ${distTotal}%, debe ser 100%`
       );
@@ -192,7 +206,13 @@ export async function generateReport(
   if (errors.length > 0 && lineItems.length === 0) {
     return {
       success: false,
-      error: `No se pudo procesar ningun producto:\n${errors.join("\n")}`,
+      error:
+        "No se pudo procesar ningun producto. Configura las distribuciones e intenta de nuevo.",
+      data: {
+        code: "no_products_processed",
+        invalidDistribution,
+        notFound,
+      },
     };
   }
 

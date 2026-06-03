@@ -136,6 +136,14 @@ export function UploadClient({
   // Step 6: Processing & result
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [processError, setProcessError] = useState<{
+    invalidDistribution: {
+      name: string;
+      productId: string | null;
+      distTotal: number;
+    }[];
+    notFound: string[];
+  } | null>(null);
 
   const configValid =
     partnerId && month && exchangeRate && parseFloat(exchangeRate) > 0;
@@ -145,6 +153,7 @@ export function UploadClient({
   const handleFile = (f: File) => {
     setFile(f);
     setResult(null);
+    setProcessError(null);
     setMatchResults([]);
     setExistingReport(null);
     setConflictChecked(false);
@@ -193,6 +202,7 @@ export function UploadClient({
     setConflictChecked(false);
     setReplaceConfirmed(false);
     setResult(null);
+    setProcessError(null);
   };
 
   // ── Sorting ────────────────────────────────────────────────────────
@@ -293,6 +303,7 @@ export function UploadClient({
     if (!configValid || products.length === 0) return;
 
     setProcessing(true);
+    setProcessError(null);
     const reportMonth = `${month}-01`;
     const rows = aggregatedToCsvRows(products);
 
@@ -314,6 +325,15 @@ export function UploadClient({
       showToast(
         `Reporte ${existingReport ? "reemplazado" : "generado"}: ${res.data.processedProducts} items procesados${adjMsg}`,
         "success"
+      );
+    } else if (res.data?.code === "no_products_processed") {
+      setProcessError({
+        invalidDistribution: res.data.invalidDistribution ?? [],
+        notFound: res.data.notFound ?? [],
+      });
+      showToast(
+        "No se pudo generar el reporte. Revisa las distribuciones.",
+        "error"
       );
     } else {
       showToast(res.error ?? "Error al procesar", "error");
@@ -340,7 +360,7 @@ export function UploadClient({
     allMatched && conflictChecked && (!existingReport || replaceConfirmed);
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div>
         <Link
           href="/reports"
@@ -748,7 +768,7 @@ export function UploadClient({
                       Productos por registrar ({unmatchedProducts.length})
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-px bg-amber-100 dark:bg-amber-900/40 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-px bg-amber-100 dark:bg-amber-900/40 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {unmatchedProducts.map((p) => {
                       const product = products.find(
                         (pr) =>
@@ -1183,7 +1203,7 @@ export function UploadClient({
       )}
 
       {/* ── Step 6: Generate report ───────────────────────────────── */}
-      {canGenerate && !result && (
+      {canGenerate && !result && !processError && (
         <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
@@ -1225,6 +1245,98 @@ export function UploadClient({
                   "Generar Reporte"
                 )}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Process error: missing distributions ─────────────────── */}
+      {processError && !result && (
+        <Card className="border-red-200 dark:border-red-900">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-300">
+              <WarningCircle className="h-5 w-5" />
+              No se pudo generar el reporte
+            </CardTitle>
+            <CardDescription>
+              {processError.invalidDistribution.length > 0
+                ? `${processError.invalidDistribution.length} producto(s) no tienen su distribución de ganancias configurada al 100%. Asigna colaboradores hasta sumar 100% en cada uno y vuelve a intentar.`
+                : "No se encontraron productos válidos para procesar."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {processError.invalidDistribution.length > 0 && (
+                <div className="rounded-md border border-red-200 dark:border-red-900/60 bg-red-50/50 dark:bg-red-950/20 overflow-hidden">
+                  <div className="px-4 py-2 bg-red-100/50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                      Distribuciones pendientes (
+                      {processError.invalidDistribution.length})
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-px bg-red-100 dark:bg-red-900/40 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {processError.invalidDistribution.map((p) => {
+                      const cell = (
+                        <div className="flex h-full items-center justify-between gap-2 bg-red-50/50 dark:bg-red-950/20 px-4 py-2 transition-colors hover:bg-red-100/60 dark:hover:bg-red-900/30">
+                          <span className="truncate font-medium text-sm">
+                            {p.name}
+                          </span>
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-xs tabular-nums"
+                          >
+                            {p.distTotal}%
+                          </Badge>
+                        </div>
+                      );
+                      return p.productId ? (
+                        <Link
+                          key={p.name}
+                          href={`/products/${p.productId}`}
+                          className="block"
+                        >
+                          {cell}
+                        </Link>
+                      ) : (
+                        <div key={p.name}>{cell}</div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {processError.notFound.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Además, {processError.notFound.length} producto(s) del CSV no
+                  se encontraron en la base de datos.
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                <Button asChild>
+                  <Link href="/products">
+                    <Package className="mr-2 h-4 w-4" />
+                    Configurar distribuciones
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleProcess}
+                  disabled={processing}
+                >
+                  {processing ? (
+                    <>
+                      <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
+                      Reintentando...
+                    </>
+                  ) : (
+                    <>
+                      <ArrowsClockwise className="mr-2 h-4 w-4" />
+                      Reintentar
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
