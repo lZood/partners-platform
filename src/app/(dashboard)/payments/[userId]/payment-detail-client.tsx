@@ -63,7 +63,6 @@ import {
 interface Props {
   data: UserPaymentDetail;
   partners: { id: string; name: string }[];
-  defaultExchangeRate: number;
 }
 
 const conceptTypeLabels: Record<string, { label: string; icon: typeof Star }> = {
@@ -76,7 +75,6 @@ const conceptTypeLabels: Record<string, { label: string; icon: typeof Star }> = 
 export function PaymentDetailClient({
   data,
   partners,
-  defaultExchangeRate,
 }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -88,7 +86,6 @@ export function PaymentDetailClient({
   // Payment selection
   const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
   const [selectedConcepts, setSelectedConcepts] = useState<Set<string>>(new Set());
-  const [exchangeRate, setExchangeRate] = useState(defaultExchangeRate);
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
 
@@ -132,6 +129,38 @@ export function PaymentDetailClient({
       if (selectedConcepts.has(c.id)) usd += c.amountUsd;
     }
     return Math.round(usd * 100) / 100;
+  })();
+
+  const selectedTotalMxn = (() => {
+    let mxn = 0;
+    for (const e of data.unpaidEarnings) {
+      if (selectedReports.has(e.reportId)) mxn += e.totalFinalMxn;
+    }
+    for (const c of data.unpaidConcepts) {
+      if (selectedConcepts.has(c.id)) mxn += c.amountMxn;
+    }
+    return Math.round(mxn * 100) / 100;
+  })();
+
+  const selectedExchangeRates = (() => {
+    const rates = new Map<string, { id: string; label: string; rate: number }>();
+    for (const e of data.unpaidEarnings) {
+      if (!selectedReports.has(e.reportId)) continue;
+      rates.set(`report:${e.reportId}`, {
+        id: `report:${e.reportId}`,
+        label: `${formatMonth(e.reportMonth)} - ${e.partnerName}`,
+        rate: e.exchangeRate,
+      });
+    }
+    for (const c of data.unpaidConcepts) {
+      if (!selectedConcepts.has(c.id)) continue;
+      rates.set(`concept:${c.id}`, {
+        id: `concept:${c.id}`,
+        label: `${c.description} - ${c.partnerName}`,
+        rate: c.exchangeRate,
+      });
+    }
+    return Array.from(rates.values());
   })();
 
   const handleAddConcept = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -190,7 +219,6 @@ export function PaymentDetailClient({
       userId: data.userId,
       reportIds: Array.from(selectedReports),
       conceptIds: Array.from(selectedConcepts),
-      exchangeRate,
       paymentMethod: paymentMethod || undefined,
       notes: paymentNotes || undefined,
     });
@@ -505,14 +533,19 @@ export function PaymentDetailClient({
                       </p>
                     </div>
                     <p
-                      className={`text-sm font-mono font-medium tabular-nums shrink-0 ${
+                      className={`text-sm font-mono font-medium tabular-nums shrink-0 text-right ${
                         concept.conceptType === "deduction"
                           ? "text-red-600"
                           : ""
                       }`}
                     >
-                      {concept.conceptType === "deduction" ? "-" : ""}
-                      {formatUSD(Math.abs(concept.amountUsd))}
+                      <span className="block">
+                        {concept.conceptType === "deduction" ? "-" : ""}
+                        {formatUSD(Math.abs(concept.amountUsd))}
+                      </span>
+                      <span className="block text-[10px] text-muted-foreground">
+                        {formatMXN(Math.abs(concept.amountMxn))}
+                      </span>
                     </p>
                     <Button
                       variant="ghost"
@@ -570,20 +603,29 @@ export function PaymentDetailClient({
               <p className="text-sm text-muted-foreground">Total a pagar</p>
               <p className="text-2xl font-bold">{formatUSD(selectedTotal)}</p>
               <p className="text-sm text-muted-foreground">
-                ≈ {formatMXN(selectedTotal * exchangeRate)}
+                ≈ {formatMXN(selectedTotalMxn)}
               </p>
             </div>
-            <div className="space-y-2">
-              <Label>Tipo de cambio USD/MXN</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={exchangeRate}
-                onChange={(e) =>
-                  setExchangeRate(parseFloat(e.target.value) || 0)
-                }
-              />
-            </div>
+            {selectedExchangeRates.length > 0 && (
+              <div className="space-y-2 rounded-lg border p-3">
+                <Label>Tipo de cambio aplicado</Label>
+                <div className="space-y-1.5">
+                  {selectedExchangeRates.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 text-sm"
+                    >
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {item.label}
+                      </span>
+                      <span className="shrink-0 font-mono tabular-nums">
+                        {item.rate.toFixed(5)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Metodo de pago (opcional)</Label>
               <Input

@@ -23,13 +23,6 @@ export default async function PaymentDetailPage({ params }: PageProps) {
     .eq("is_active", true)
     .order("name");
 
-  // Get latest exchange rate
-  const { data: latestRate } = await supabase
-    .from("exchange_rates")
-    .select("usd_to_mxn")
-    .order("month", { ascending: false })
-    .limit(1);
-
   const result = await getUserPaymentDetail(userId);
 
   if (!result.success) {
@@ -40,7 +33,6 @@ export default async function PaymentDetailPage({ params }: PageProps) {
     <PaymentDetailClient
       data={result.data}
       partners={partners ?? []}
-      defaultExchangeRate={Number((latestRate as any)?.[0]?.usd_to_mxn ?? 17)}
     />
   );
 }

@@ -54,6 +54,8 @@ export interface UserPaymentDetail {
     conceptType: string;
     description: string;
     amountUsd: number;
+    amountMxn: number;
+    exchangeRate: number;
     conceptDate: string;
     partnerName: string;
     partnerId: string;
@@ -297,11 +299,22 @@ export async function getUserPaymentDetail(
     if (partnerId) conceptsQuery = conceptsQuery.eq("partner_id", partnerId);
 
     const { data: concepts } = await conceptsQuery;
+    const conceptRates = await getConceptExchangeRates(
+      supabase,
+      (concepts ?? []) as any[]
+    );
     const unpaidConcepts = (concepts ?? []).map((c: any) => ({
       id: c.id,
       conceptType: c.concept_type,
       description: c.description,
       amountUsd: Number(c.amount_usd),
+      amountMxn:
+        Math.round(
+          Number(c.amount_usd) *
+            getConceptRate(conceptRates, c.partner_id, c.concept_date) *
+            100
+        ) / 100,
+      exchangeRate: getConceptRate(conceptRates, c.partner_id, c.concept_date),
       conceptDate: c.concept_date,
       partnerName: c.partners?.name ?? "—",
       partnerId: c.partner_id,
@@ -527,6 +540,90 @@ function formatPctShort(value: number): string {
   return `${str}%`;
 }
 
+function monthStart(date: string): string {
+  return `${date.substring(0, 7)}-01`;
+}
+
+function conceptRateKey(partnerId: string, date: string): string {
+  return `${partnerId}:${monthStart(date)}`;
+}
+
+async function getConceptExchangeRates(
+  supabase: any,
+  concepts: any[]
+): Promise<Map<string, number>> {
+  const keys = new Set<string>();
+  const partnerIds = new Set<string>();
+  const months = new Set<string>();
+
+  for (const concept of concepts) {
+    if (!concept.partner_id || !concept.concept_date) continue;
+    const month = monthStart(concept.concept_date);
+    keys.add(`${concept.partner_id}:${month}`);
+    partnerIds.add(concept.partner_id);
+    months.add(month);
+  }
+
+  const rates = new Map<string, number>();
+  if (keys.size === 0) return rates;
+
+  const { data } = await supabase
+    .from("exchange_rates")
+    .select("partner_id, month, usd_to_mxn")
+    .in("partner_id", Array.from(partnerIds))
+    .in("month", Array.from(months));
+
+  for (const rate of (data ?? []) as any[]) {
+    rates.set(
+      `${rate.partner_id}:${monthStart(rate.month)}`,
+      Number(rate.usd_to_mxn)
+    );
+  }
+
+  for (const key of Array.from(keys)) {
+    if (rates.has(key)) continue;
+    const [partnerId, month] = key.split(":");
+    rates.set(key, await getExchangeRateForConcept(supabase, partnerId, month));
+  }
+
+  return rates;
+}
+
+function getConceptRate(
+  rates: Map<string, number>,
+  partnerId: string,
+  date: string
+): number {
+  return rates.get(conceptRateKey(partnerId, date)) ?? 1;
+}
+
+async function getExchangeRateForConcept(
+  supabase: any,
+  partnerId: string,
+  date: string
+): Promise<number> {
+  const month = monthStart(date);
+  const { data } = await supabase
+    .from("exchange_rates")
+    .select("usd_to_mxn")
+    .eq("partner_id", partnerId)
+    .lte("month", month)
+    .order("month", { ascending: false })
+    .limit(1);
+
+  const rate = (data as any)?.[0]?.usd_to_mxn;
+  if (rate != null) return Number(rate);
+
+  const { data: latestRate } = await supabase
+    .from("exchange_rates")
+    .select("usd_to_mxn")
+    .eq("partner_id", partnerId)
+    .order("month", { ascending: false })
+    .limit(1);
+
+  return Number((latestRate as any)?.[0]?.usd_to_mxn ?? 1);
+}
+
 /**
  * Create a payment concept (extra charge/bonus/deduction).
  */
@@ -603,7 +700,7 @@ export async function registerPayment(
     userId: string;
     reportIds: string[];
     conceptIds: string[];
-    exchangeRate: number;
+    exchangeRate?: number;
     paymentMethod?: string;
     notes?: string;
   }
@@ -664,22 +761,29 @@ export async function registerPayment(
   for (const conceptId of data.conceptIds) {
     const { data: concept } = await supabase
       .from("payment_concepts")
-      .select("id, concept_type, description, amount_usd, partners (name)")
+      .select("id, concept_type, description, amount_usd, concept_date, partner_id, partners (name)")
       .eq("id", conceptId)
       .single();
 
     if (concept) {
       const amountUsd = Number((concept as any).amount_usd);
-      const amountMxn = amountUsd * data.exchangeRate;
+      const conceptRate = await getExchangeRateForConcept(
+        supabase,
+        (concept as any).partner_id,
+        (concept as any).concept_date
+      );
+      const amountMxn = amountUsd * conceptRate;
       totalUsd += amountUsd;
       totalMxn += amountMxn;
 
-      const typeLabel = {
+      const typeLabels: Record<string, string> = {
         commission: "Comision",
         work: "Trabajo",
         bonus: "Bono",
         deduction: "Deduccion",
-      }[(concept as any).concept_type] ?? (concept as any).concept_type;
+      };
+      const conceptType = String((concept as any).concept_type);
+      const typeLabel = typeLabels[conceptType] ?? conceptType;
 
       items.push({
         item_type: "extra_concept",
@@ -695,6 +799,9 @@ export async function registerPayment(
     return { success: false, error: "No hay items seleccionados" };
   }
 
+  const effectiveExchangeRate =
+    totalUsd !== 0 ? Math.round((totalMxn / totalUsd) * 1000000) / 1000000 : 1;
+
   // Create payment
   const { data: payment, error: paymentError } = await supabase
     .from("payments")
@@ -703,7 +810,7 @@ export async function registerPayment(
       user_id: data.userId,
       total_usd: Math.round(totalUsd * 100) / 100,
       total_mxn: Math.round(totalMxn * 100) / 100,
-      exchange_rate: data.exchangeRate,
+      exchange_rate: effectiveExchangeRate,
       payment_method: data.paymentMethod || null,
       notes: data.notes || null,
       created_by: appUser.id,
