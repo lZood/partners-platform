@@ -11,7 +11,7 @@ import {
 import { uploadBuffer } from "@/lib/supabase/storage-server";
 import { createNotification } from "@/actions/notifications";
 import { sendPaymentNotificationEmail } from "@/lib/email";
-import { formatMonth } from "@/lib/utils";
+import { formatMonth, signedConceptAmount } from "@/lib/utils";
 
 export type PaymentActionResult = {
   success: boolean;
@@ -168,14 +168,15 @@ export async function getPaymentsSummary(
       // Unpaid concepts
       let conceptsQuery = supabase
         .from("payment_concepts")
-        .select("amount_usd")
+        .select("concept_type, amount_usd")
         .eq("user_id", userId)
         .eq("is_paid", false);
       if (partnerId) conceptsQuery = conceptsQuery.eq("partner_id", partnerId);
 
       const { data: concepts } = await conceptsQuery;
       const unpaidConceptsUsd = (concepts ?? []).reduce(
-        (sum, c: any) => sum + Number(c.amount_usd ?? 0),
+        (sum, c: any) =>
+          sum + signedConceptAmount(c.concept_type, Number(c.amount_usd ?? 0)),
         0
       );
 
@@ -766,7 +767,13 @@ export async function registerPayment(
       .single();
 
     if (concept) {
-      const amountUsd = Number((concept as any).amount_usd);
+      const conceptType = String((concept as any).concept_type);
+      // Deductions reduce the payment total, so use the signed amount for
+      // both the running totals and the stored payment item.
+      const amountUsd = signedConceptAmount(
+        conceptType,
+        Number((concept as any).amount_usd)
+      );
       const conceptRate = await getExchangeRateForConcept(
         supabase,
         (concept as any).partner_id,
@@ -782,7 +789,6 @@ export async function registerPayment(
         bonus: "Bono",
         deduction: "Deduccion",
       };
-      const conceptType = String((concept as any).concept_type);
       const typeLabel = typeLabels[conceptType] ?? conceptType;
 
       items.push({

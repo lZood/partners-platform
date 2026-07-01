@@ -37,6 +37,7 @@ import {
   formatMonth,
   formatPercentage,
   cn,
+  signedConceptAmount,
 } from "@/lib/utils";
 import type { UserPaymentDetail } from "@/actions/payments";
 
@@ -183,7 +184,7 @@ export function MyIncomeClient({
     0
   );
   const pendingConceptsTotal = paymentDetail.unpaidConcepts.reduce(
-    (s, c) => s + c.amountUsd,
+    (s, c) => s + signedConceptAmount(c.conceptType, c.amountUsd),
     0
   );
   const totalPending = pendingEarningsTotal + pendingConceptsTotal;
