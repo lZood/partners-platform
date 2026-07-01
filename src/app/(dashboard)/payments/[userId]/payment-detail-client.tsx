@@ -58,6 +58,7 @@ import {
   formatMonth,
   displayName,
   getInitials,
+  signedConceptAmount,
 } from "@/lib/utils";
 
 interface Props {
@@ -126,7 +127,8 @@ export function PaymentDetailClient({
       if (selectedReports.has(e.reportId)) usd += e.totalFinalUsd;
     }
     for (const c of data.unpaidConcepts) {
-      if (selectedConcepts.has(c.id)) usd += c.amountUsd;
+      if (selectedConcepts.has(c.id))
+        usd += signedConceptAmount(c.conceptType, c.amountUsd);
     }
     return Math.round(usd * 100) / 100;
   })();
@@ -137,7 +139,8 @@ export function PaymentDetailClient({
       if (selectedReports.has(e.reportId)) mxn += e.totalFinalMxn;
     }
     for (const c of data.unpaidConcepts) {
-      if (selectedConcepts.has(c.id)) mxn += c.amountMxn;
+      if (selectedConcepts.has(c.id))
+        mxn += signedConceptAmount(c.conceptType, c.amountMxn);
     }
     return Math.round(mxn * 100) / 100;
   })();
@@ -237,7 +240,10 @@ export function PaymentDetailClient({
 
   const totalPendingUsd =
     data.unpaidEarnings.reduce((s, e) => s + e.totalFinalUsd, 0) +
-    data.unpaidConcepts.reduce((s, c) => s + c.amountUsd, 0);
+    data.unpaidConcepts.reduce(
+      (s, c) => s + signedConceptAmount(c.conceptType, c.amountUsd),
+      0
+    );
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("es-MX", {

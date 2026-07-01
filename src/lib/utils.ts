@@ -74,6 +74,19 @@ export function getInitials(name: string): string {
 }
 
 /**
+ * Signed contribution of a payment concept toward a total.
+ *
+ * Deductions are stored with a positive `amount_usd` (the magnitude the user
+ * typed) but must *reduce* a total, so they contribute as a negative value.
+ * All other concept types (commission, work, bonus) contribute as-is. Using
+ * `Math.abs` makes this robust whether the stored amount is positive or
+ * negative.
+ */
+export function signedConceptAmount(conceptType: string, amount: number): number {
+  return conceptType === "deduction" ? -Math.abs(amount) : amount;
+}
+
+/**
  * Format a month date (YYYY-MM-DD) to display string
  */
 export function formatMonth(dateStr: string): string {
