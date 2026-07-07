@@ -8,7 +8,7 @@ import {
   type PaymentReceiptProductRow,
   type PaymentReceiptConceptRow,
 } from "@/lib/pdf/receipt-pdf";
-import { uploadBuffer } from "@/lib/supabase/storage-server";
+import { uploadBuffer, deleteFile } from "@/lib/supabase/storage-server";
 import { createNotification } from "@/actions/notifications";
 import { sendPaymentNotificationEmail } from "@/lib/email";
 import { formatMonth, signedConceptAmount } from "@/lib/utils";
@@ -689,6 +689,74 @@ export async function deletePaymentConcept(
   if (error) return { success: false, error: error.message };
 
   revalidatePath(`/payments/${userId}`);
+  return { success: true };
+}
+
+/**
+ * Revert a registered payment back to pending.
+ *
+ * Undoes a payment so its underlying reports and extra concepts become
+ * unpaid again — used when a payment was registered by mistake or needs a
+ * modification. This:
+ *   - restores any linked extra concepts to `is_paid = false`,
+ *   - deletes the payment items (which is what marks reports as paid), so the
+ *     reports reappear as pending earnings,
+ *   - deletes the payment record itself, and
+ *   - best-effort removes the stored receipt PDF.
+ */
+export async function revertPayment(
+  paymentId: string,
+  userId: string
+): Promise<PaymentActionResult> {
+  const supabase = createServerSupabaseClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "No autenticado" };
+
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("id, user_id, payment_items (item_type, reference_id)")
+    .eq("id", paymentId)
+    .single();
+
+  if (!payment) return { success: false, error: "Pago no encontrado" };
+
+  const items = ((payment as any).payment_items ?? []) as any[];
+
+  // Restore linked extra concepts to pending.
+  const conceptIds = items
+    .filter((i) => i.item_type === "extra_concept" && i.reference_id)
+    .map((i) => i.reference_id);
+
+  if (conceptIds.length > 0) {
+    await supabase
+      .from("payment_concepts")
+      .update({ is_paid: false })
+      .in("id", conceptIds);
+  }
+
+  // Remove the payment items first so the reports are no longer considered
+  // paid, then delete the payment record.
+  await supabase.from("payment_items").delete().eq("payment_id", paymentId);
+
+  const { error: deleteError } = await supabase
+    .from("payments")
+    .delete()
+    .eq("id", paymentId);
+
+  if (deleteError) return { success: false, error: deleteError.message };
+
+  // Best-effort cleanup of the stored receipt PDF (uploaded as `<id>.pdf`).
+  try {
+    await deleteFile("receipts", `${paymentId}.pdf`);
+  } catch {
+    // Non-fatal: the payment is already reverted.
+  }
+
+  revalidatePath(`/payments/${userId}`);
+  revalidatePath("/payments");
   return { success: true };
 }
 
