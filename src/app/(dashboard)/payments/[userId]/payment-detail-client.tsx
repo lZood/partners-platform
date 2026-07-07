@@ -18,6 +18,7 @@ import {
   Gift,
   MinusCircle,
   Star,
+  ArrowCounterClockwise,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ import {
   createPaymentConcept,
   deletePaymentConcept,
   registerPayment,
+  revertPayment,
 } from "@/actions/payments";
 import type { UserPaymentDetail } from "@/actions/payments";
 import {
@@ -187,6 +189,22 @@ export function PaymentDetailClient({
     const result = await deletePaymentConcept(id, data.userId);
     if (result.success) {
       showToast("Concepto eliminado", "success");
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error", "error");
+    }
+  };
+
+  const handleRevertPayment = async (paymentId: string) => {
+    if (
+      !confirm(
+        "Revertir este pago a pendiente? Los reportes y conceptos volveran a aparecer como no pagados."
+      )
+    )
+      return;
+    const result = await revertPayment(paymentId, data.userId);
+    if (result.success) {
+      showToast("Pago revertido a pendiente", "success");
       router.refresh();
     } else {
       showToast(result.error ?? "Error", "error");
@@ -723,6 +741,15 @@ export function PaymentDetailClient({
                       >
                         <FileXls className="mr-1.5 h-3.5 w-3.5" />
                         Excel
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleRevertPayment(payment.id)}
+                      >
+                        <ArrowCounterClockwise className="mr-1.5 h-3.5 w-3.5" />
+                        Revertir
                       </Button>
                     </div>
                   </div>
