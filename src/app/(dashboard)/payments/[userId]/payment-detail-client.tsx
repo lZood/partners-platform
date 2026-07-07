@@ -85,6 +85,8 @@ export function PaymentDetailClient({
   const [saving, setSaving] = useState(false);
   const [conceptDialogOpen, setConceptDialogOpen] = useState(false);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [revertTarget, setRevertTarget] = useState<string | null>(null);
+  const [reverting, setReverting] = useState(false);
 
   // Payment selection
   const [selectedReports, setSelectedReports] = useState<Set<string>>(new Set());
@@ -195,16 +197,14 @@ export function PaymentDetailClient({
     }
   };
 
-  const handleRevertPayment = async (paymentId: string) => {
-    if (
-      !confirm(
-        "Revertir este pago a pendiente? Los reportes y conceptos volveran a aparecer como no pagados."
-      )
-    )
-      return;
-    const result = await revertPayment(paymentId, data.userId);
+  const handleConfirmRevert = async () => {
+    if (!revertTarget) return;
+    setReverting(true);
+    const result = await revertPayment(revertTarget, data.userId);
+    setReverting(false);
     if (result.success) {
       showToast("Pago revertido a pendiente", "success");
+      setRevertTarget(null);
       router.refresh();
     } else {
       showToast(result.error ?? "Error", "error");
@@ -681,6 +681,41 @@ export function PaymentDetailClient({
         </DialogContent>
       </Dialog>
 
+      {/* Revert confirmation dialog */}
+      <Dialog
+        open={revertTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevertTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Revertir pago a pendiente</DialogTitle>
+            <DialogDescription>
+              Los reportes y conceptos de este pago volveran a aparecer como
+              no pagados y el registro del pago se eliminara. Esta accion no se
+              puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRevertTarget(null)}
+              disabled={reverting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmRevert}
+              disabled={reverting}
+            >
+              {reverting ? "Revirtiendo..." : "Revertir Pago"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Payment History */}
       <Card data-animate-card className="border-0 shadow-sm">
         <CardHeader className="pb-3">
@@ -746,7 +781,7 @@ export function PaymentDetailClient({
                         variant="outline"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => handleRevertPayment(payment.id)}
+                        onClick={() => setRevertTarget(payment.id)}
                       >
                         <ArrowCounterClockwise className="mr-1.5 h-3.5 w-3.5" />
                         Revertir
