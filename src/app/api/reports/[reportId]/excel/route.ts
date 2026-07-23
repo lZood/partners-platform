@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { generateReportExcel } from "@/lib/excel/report-excel";
+import { aggregateTaxBreakdown } from "@/lib/calculations/cascade-tax";
 
 export async function GET(
   request: NextRequest,
@@ -91,6 +92,11 @@ export async function GET(
     }
   }
 
+  // Aggregate how much of each individual tax was withheld across the report.
+  const taxBreakdown = aggregateTaxBreakdown(
+    (lineItems ?? []).map((item: any) => item.tax_breakdown)
+  );
+
   const buffer = await generateReportExcel({
     reportMonth: r.report_month,
     partnerName: r.partners?.name ?? "Partner",
@@ -99,6 +105,7 @@ export async function GET(
     grandTotalUsd: Number(r.total_usd ?? 0),
     grandTotalMxn: Number(r.total_mxn ?? 0),
     users: Array.from(userMap.values()),
+    taxBreakdown,
   });
 
   const filename = `reporte-${r.report_month}.xlsx`;

@@ -46,6 +46,11 @@ export interface ReportPDFData {
     totalFinalUsd: number;
     totalFinalMxn: number;
   }[];
+  taxBreakdown?: {
+    name: string;
+    rate: number | null;
+    totalUsd: number;
+  }[];
   grandTotalUsd: number;
   grandTotalMxn: number;
 }
@@ -429,6 +434,128 @@ export async function generateReportPDF(data: ReportPDFData): Promise<Buffer> {
       y += ROW_H + 2;
 
       y += 22; // gap between collaborators
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // Tax breakdown — amount withheld per individual tax
+    // ════════════════════════════════════════════════════════════
+    const taxRows = data.taxBreakdown ?? [];
+    if (taxRows.length > 0) {
+      // Section needs: title bar + header + rows + total row
+      y = ensureSpace(y, 22 + HEADER_H + ROW_H * (taxRows.length + 1) + 20);
+
+      // Section title bar
+      doc.save();
+      doc.roundedRect(M.left, y, CONTENT_W, 22, 4).fill(C.ink);
+      doc.restore();
+      doc
+        .font(F.heading)
+        .fontSize(11)
+        .fillColor(C.white)
+        .text("Desglose de Impuestos", M.left + 10, y + 6, {
+          width: CONTENT_W - 20,
+          lineBreak: false,
+        });
+      y += 22 + 4;
+
+      // Four columns: Impuesto | Tasa | Monto USD | Monto MXN
+      const taxCols: Col[] = [
+        { label: "Impuesto", w: 236, align: "left" },
+        { label: "Tasa", w: 80, align: "right" },
+        { label: "Monto USD", w: 98, align: "right" },
+        { label: "Monto MXN", w: 98, align: "right" },
+      ];
+      const drawTaxRow = (
+        ry: number,
+        values: string[],
+        opts: { bold?: boolean; bg?: string; color?: string } = {}
+      ) => {
+        if (opts.bg) {
+          doc.save();
+          doc.rect(M.left, ry, CONTENT_W, ROW_H).fill(opts.bg);
+          doc.restore();
+        }
+        doc
+          .font(opts.bold ? F.bodyBold : F.body)
+          .fontSize(8.5)
+          .fillColor(opts.color ?? C.ink);
+        let x = M.left;
+        taxCols.forEach((col, i) => {
+          const textY = ry + (ROW_H - 8.5) / 2 - 1;
+          if (col.align === "left") {
+            doc.text(values[i] ?? "", x + PAD, textY, {
+              width: col.w - PAD * 2,
+              align: "left",
+              lineBreak: false,
+              ellipsis: true,
+            });
+          } else {
+            doc.text(values[i] ?? "", x, textY, {
+              width: col.w - PAD,
+              align: "right",
+              lineBreak: false,
+            });
+          }
+          x += col.w;
+        });
+      };
+
+      // Header
+      doc.save();
+      doc.rect(M.left, y, CONTENT_W, HEADER_H).fill(C.graphite);
+      doc.restore();
+      doc.font(F.bodyBold).fontSize(8.5).fillColor(C.white);
+      let hx = M.left;
+      taxCols.forEach((col) => {
+        const textY = y + (HEADER_H - 8.5) / 2 - 1;
+        if (col.align === "left") {
+          doc.text(col.label, hx + PAD, textY, {
+            width: col.w - PAD * 2,
+            align: "left",
+            lineBreak: false,
+          });
+        } else {
+          doc.text(col.label, hx, textY, {
+            width: col.w - PAD,
+            align: "right",
+            lineBreak: false,
+          });
+        }
+        hx += col.w;
+      });
+      y += HEADER_H;
+
+      let zebra = false;
+      let totalTaxUsd = 0;
+      for (const tax of taxRows) {
+        totalTaxUsd += tax.totalUsd;
+        drawTaxRow(
+          y,
+          [
+            tax.name,
+            tax.rate !== null ? formatPercentage(tax.rate) : "—",
+            formatUSD(tax.totalUsd),
+            formatMXN(tax.totalUsd * data.exchangeRate),
+          ],
+          { bg: zebra ? C.paper : C.white }
+        );
+        y += ROW_H;
+        zebra = !zebra;
+      }
+
+      // Total row
+      hLine(y + 1, C.accent, 1);
+      drawTaxRow(
+        y + 2,
+        [
+          "Total Impuestos",
+          "",
+          formatUSD(totalTaxUsd),
+          formatMXN(totalTaxUsd * data.exchangeRate),
+        ],
+        { bold: true, bg: C.accentTint, color: C.ink }
+      );
+      y += ROW_H + 2 + 22;
     }
 
     // ════════════════════════════════════════════════════════════
