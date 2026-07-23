@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { generateReportPDF } from "@/lib/pdf/report-pdf";
+import { aggregateTaxBreakdown } from "@/lib/calculations/cascade-tax";
 
 export async function GET(
   request: NextRequest,
@@ -46,6 +47,7 @@ export async function GET(
         percentage_applied,
         gross_usd,
         after_taxes_usd,
+        tax_breakdown,
         final_usd,
         final_mxn,
         user_id,
@@ -165,6 +167,11 @@ export async function GET(
       0
     );
 
+    // Aggregate how much of each individual tax was withheld across the report.
+    const taxBreakdown = aggregateTaxBreakdown(
+      lineItems.map((item) => item.tax_breakdown)
+    );
+
     // Generate PDF
     const pdfBuffer = await generateReportPDF({
       reportMonth: rpt.report_month,
@@ -172,6 +179,7 @@ export async function GET(
       exchangeRate,
       isLocked: rpt.is_locked,
       userSummaries,
+      taxBreakdown,
       grandTotalUsd,
       grandTotalMxn,
     });

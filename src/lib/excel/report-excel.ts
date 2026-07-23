@@ -38,6 +38,11 @@ interface ReportExcelData {
     totalFinalUsd: number;
     totalFinalMxn: number;
   }[];
+  taxBreakdown?: {
+    name: string;
+    rate: number | null;
+    totalUsd: number;
+  }[];
 }
 
 // ── Brand palette (BoxBuild) ───────────────────────────────────
@@ -391,6 +396,99 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
     adjSheet.getRow(5).height = 24;
   }
 
+  // ════════════════════════════════════════════════════════════
+  // Sheet 4 · Impuestos (amount withheld per individual tax)
+  // ════════════════════════════════════════════════════════════
+  const taxSheet = wb.addWorksheet("Impuestos", {
+    views: [{ showGridLines: false, state: "frozen", ySplit: 4 }],
+  });
+  taxSheet.columns = [
+    { width: 4 },
+    { width: 32 }, // impuesto
+    { width: 12 }, // tasa
+    { width: 18 }, // monto usd
+    { width: 18 }, // monto mxn
+  ];
+  const TAX_SPAN = 5;
+
+  addBrandBanner({
+    wb,
+    sheet: taxSheet,
+    title: "Desglose de Impuestos",
+    subtitle: `${data.partnerName}  ·  ${periodLabel}`,
+    colSpan: TAX_SPAN,
+  });
+
+  const taxHeaders = ["Impuesto", "Tasa", "Monto USD", "Monto MXN"];
+  const taxHeaderRow = taxSheet.getRow(4);
+  taxHeaders.forEach((h, i) => (taxHeaderRow.getCell(i + 2).value = h));
+  styleHeaderRow(taxSheet, 4, TAX_SPAN);
+  taxSheet.getCell(4, 1).fill = fill(COLORS.white);
+  taxSheet.getCell(4, 1).border = {};
+
+  const taxRows = data.taxBreakdown ?? [];
+  let txr = 5;
+  let taxZebra = false;
+  let totalTaxUsd = 0;
+  for (const tax of taxRows) {
+    totalTaxUsd += tax.totalUsd;
+    const row = taxSheet.getRow(txr);
+    row.getCell(2).value = tax.name;
+    row.getCell(3).value = tax.rate !== null ? tax.rate / 100 : null;
+    row.getCell(4).value = tax.totalUsd;
+    row.getCell(5).value = tax.totalUsd * data.exchangeRate;
+    row.getCell(3).numFmt = pctFormat;
+    row.getCell(4).numFmt = currencyFormat;
+    row.getCell(5).numFmt = currencyFormat;
+
+    const bg = taxZebra ? COLORS.zebra : COLORS.white;
+    for (let c = 2; c <= TAX_SPAN; c++) {
+      const cell = row.getCell(c);
+      cell.fill = fill(bg);
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: c === 2 ? "left" : "right",
+        indent: c === 2 ? 1 : 0,
+      };
+    }
+    taxZebra = !taxZebra;
+    txr++;
+  }
+
+  if (taxRows.length === 0) {
+    taxSheet.mergeCells(5, 2, 5, TAX_SPAN);
+    const empty = taxSheet.getCell(5, 2);
+    empty.value = "No se aplicaron impuestos en este periodo.";
+    empty.font = { italic: true, color: { argb: COLORS.muted } };
+    empty.alignment = { horizontal: "center", vertical: "middle" };
+    empty.fill = fill(COLORS.zebra);
+    taxSheet.getRow(5).height = 24;
+  } else {
+    // Total row
+    const tr = taxSheet.getRow(txr);
+    tr.getCell(2).value = "Total Impuestos";
+    tr.getCell(4).value = totalTaxUsd;
+    tr.getCell(5).value = totalTaxUsd * data.exchangeRate;
+    tr.getCell(4).numFmt = currencyFormat;
+    tr.getCell(5).numFmt = currencyFormat;
+    for (let c = 1; c <= TAX_SPAN; c++) {
+      const cell = tr.getCell(c);
+      cell.fill = fill(COLORS.totalRow);
+      cell.font = { bold: true, color: { argb: COLORS.ink } };
+      cell.border = {
+        top: { style: "thin", color: { argb: COLORS.accent } },
+        bottom: { style: "thin", color: { argb: COLORS.accent } },
+      };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: c === 2 ? "left" : "right",
+        indent: c === 2 ? 1 : 0,
+      };
+    }
+    tr.height = 20;
+  }
+
   // Brand footer on every sheet (consistent with the other exports).
   const footer = `BoxBuild · Generado el ${generatedAt}`;
   summary.addRow([]);
@@ -399,11 +497,14 @@ export async function generateReportExcel(data: ReportExcelData): Promise<Buffer
   addBrandFooter(detail, footer, DETAIL_SPAN);
   adjSheet.addRow([]);
   addBrandFooter(adjSheet, footer, ADJ_SPAN);
+  taxSheet.addRow([]);
+  addBrandFooter(taxSheet, footer, TAX_SPAN);
 
   // Apply Sora to any data cell that didn't get an explicit brand font.
   applyBodyFontDefault(summary);
   applyBodyFontDefault(detail);
   applyBodyFontDefault(adjSheet);
+  applyBodyFontDefault(taxSheet);
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);

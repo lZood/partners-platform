@@ -40,6 +40,7 @@ import {
 import { lockReport, unlockReport } from "@/actions/reports";
 import { useToast } from "@/components/shared/toast-provider";
 import { formatUSD, formatMXN, formatMonth, formatPercentage } from "@/lib/utils";
+import { aggregateTaxBreakdown } from "@/lib/calculations/cascade-tax";
 import { createClient } from "@/lib/supabase/client";
 
 interface Props {
@@ -131,6 +132,19 @@ export function ReportDetailClient({
     (sum, u) => sum + u.totalFinalMxn,
     0
   );
+
+  // Per-tax breakdown: how much of each individual tax was withheld, so the
+  // report shows the amount per tax and not just the combined post-tax figure.
+  const taxSummary = useMemo(() => {
+    const itemsToProcess = isCollaboratorView
+      ? lineItems.filter((item) => item.user_id === currentUserId)
+      : lineItems;
+    return aggregateTaxBreakdown(
+      itemsToProcess.map((item) => item.tax_breakdown)
+    );
+  }, [lineItems, currentUserId, isCollaboratorView]);
+
+  const totalTaxesUsd = taxSummary.reduce((s, t) => s + t.totalUsd, 0);
 
   const handleLock = async () => {
     setLoading(true);
@@ -312,6 +326,70 @@ export function ReportDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      {/* Tax breakdown — amount withheld per individual tax */}
+      {taxSummary.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Desglose de Impuestos</CardTitle>
+            <CardDescription>
+              Monto retenido por cada impuesto aplicado en este periodo
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="pb-3 font-medium text-muted-foreground">
+                      Impuesto
+                    </th>
+                    <th className="pb-3 font-medium text-muted-foreground text-right">
+                      Tasa
+                    </th>
+                    <th className="pb-3 font-medium text-muted-foreground text-right">
+                      Monto USD
+                    </th>
+                    <th className="pb-3 font-medium text-muted-foreground text-right">
+                      Monto MXN
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taxSummary.map((tax) => (
+                    <tr
+                      key={tax.name}
+                      className="border-b last:border-0 hover:bg-muted/50"
+                    >
+                      <td className="py-3 font-medium">{tax.name}</td>
+                      <td className="py-3 text-right font-mono text-muted-foreground">
+                        {tax.rate !== null ? formatPercentage(tax.rate) : "—"}
+                      </td>
+                      <td className="py-3 text-right font-mono">
+                        {formatUSD(tax.totalUsd)}
+                      </td>
+                      <td className="py-3 text-right font-mono">
+                        {formatMXN(tax.totalUsd * exchangeRate)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-muted/50 font-medium">
+                    <td className="py-3" colSpan={2}>
+                      Total Impuestos
+                    </td>
+                    <td className="py-3 text-right font-mono">
+                      {formatUSD(totalTaxesUsd)}
+                    </td>
+                    <td className="py-3 text-right font-mono">
+                      {formatMXN(totalTaxesUsd * exchangeRate)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* User breakdown */}
       <Card>

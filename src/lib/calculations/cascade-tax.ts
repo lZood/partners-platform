@@ -47,3 +47,57 @@ export function applyCascadeTaxes(
     breakdown,
   };
 }
+
+export interface AggregatedTax {
+  name: string;
+  /** Nominal rate when consistent across every line item; null if it varied. */
+  rate: number | null;
+  totalUsd: number;
+}
+
+/**
+ * Aggregate per-line-item tax breakdowns into a per-tax total.
+ *
+ * Each report line item stores the cascade `tax_breakdown` (the amount
+ * `deducted` for every tax). This sums those deductions by tax name so a
+ * report can show how much of each individual tax was withheld — not just the
+ * combined post-tax figure. Taxes keep their first-seen order, which matches
+ * the cascade priority order they were applied in.
+ */
+export function aggregateTaxBreakdown(
+  breakdowns: (TaxStep[] | null | undefined)[]
+): AggregatedTax[] {
+  const map = new Map<
+    string,
+    { name: string; rate: number; rateConsistent: boolean; totalUsd: number }
+  >();
+  const order: string[] = [];
+
+  for (const breakdown of breakdowns) {
+    if (!Array.isArray(breakdown)) continue;
+    for (const step of breakdown) {
+      if (!step?.name) continue;
+      if (!map.has(step.name)) {
+        map.set(step.name, {
+          name: step.name,
+          rate: Number(step.rate),
+          rateConsistent: true,
+          totalUsd: 0,
+        });
+        order.push(step.name);
+      }
+      const entry = map.get(step.name)!;
+      if (entry.rate !== Number(step.rate)) entry.rateConsistent = false;
+      entry.totalUsd += Number(step.deducted ?? 0);
+    }
+  }
+
+  return order.map((name) => {
+    const entry = map.get(name)!;
+    return {
+      name: entry.name,
+      rate: entry.rateConsistent ? entry.rate : null,
+      totalUsd: round(entry.totalUsd, 6),
+    };
+  });
+}
