@@ -294,11 +294,403 @@ export async function updateCollaborator(
     .single();
 
   if (error) {
+    // Unique-violation on the email column: the raw Postgres message
+    // ("duplicate key value violates unique constraint users_email_key") is
+    // cryptic, so surface an actionable one that points to the merge flow.
+    if (
+      (error as any).code === "23505" ||
+      /users_email_key/i.test(error.message)
+    ) {
+      return {
+        success: false,
+        error:
+          "Ese email ya pertenece a otra cuenta. Usa 'Invitar al sistema' para fusionar los perfiles.",
+      };
+    }
     return { success: false, error: error.message };
   }
 
   revalidatePath("/collaborators");
   return { success: true, data };
+}
+
+/**
+ * Turn an existing `users` row into a system_user with login access:
+ * generates a Supabase invite (creates the auth account) and emails it via
+ * our SMTP. Mirrors the system_user path of `createCollaborator`. Returns an
+ * `emailWarning` (not an error) when the account was created but the SMTP
+ * send failed, so callers can still surface success.
+ */
+async function inviteExistingUser(
+  serviceClient: ReturnType<typeof createServiceRoleClient>,
+  userId: string,
+  name: string | null,
+  email: string
+): Promise<{ success: boolean; error?: string; emailWarning?: string | null }> {
+  const { data: linkData, error: linkError } =
+    await serviceClient.auth.admin.generateLink({
+      type: "invite",
+      email,
+      options: {
+        data: { name: name ?? "" },
+        redirectTo: `${getBaseUrl()}/auth/set-password`,
+      },
+    });
+
+  if (linkError || !linkData?.user) {
+    const msg =
+      linkError?.message ||
+      (linkError ? JSON.stringify(linkError) : "Error desconocido");
+    return { success: false, error: `Error creando acceso: ${msg}` };
+  }
+
+  await serviceClient
+    .from("users")
+    .update({
+      auth_user_id: linkData.user.id,
+      user_type: "system_user",
+      email,
+      is_active: false,
+    })
+    .eq("id", userId);
+
+  const inviteLink = wrapAuthLink(
+    linkData.properties.hashed_token,
+    "invite",
+    "/auth/set-password"
+  );
+  const emailResult = await sendInvitationEmail({
+    to: email,
+    userName: name ?? "Usuario",
+    inviteLink,
+  });
+
+  return {
+    success: true,
+    emailWarning: emailResult.success
+      ? null
+      : emailResult.error ?? "No se pudo enviar el email de invitacion",
+  };
+}
+
+/**
+ * Convert a virtual profile into a system_user (create login + send invite).
+ *
+ * If the email already belongs to another account, no change is made and the
+ * result reports `data.needsMerge` with the conflicting account so the UI can
+ * confirm a merge (see `mergeAndConvertToSystemUser`).
+ */
+export async function convertToSystemUser(
+  userId: string,
+  email: string
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "No autenticado" };
+
+  const emailNorm = (email ?? "").trim().toLowerCase();
+  if (!emailNorm || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailNorm)) {
+    return { success: false, error: "Ingresa un email valido" };
+  }
+
+  const serviceClient = createServiceRoleClient();
+
+  const { data: target } = await serviceClient
+    .from("users")
+    .select("id, name, email, user_type")
+    .eq("id", userId)
+    .single();
+
+  if (!target) return { success: false, error: "Usuario no encontrado" };
+  if (target.user_type === "system_user") {
+    return { success: false, error: "Este usuario ya tiene acceso al sistema" };
+  }
+
+  // Collision with another app user → offer to merge.
+  const { data: existing } = await serviceClient
+    .from("users")
+    .select("id, name")
+    .ilike("email", emailNorm)
+    .neq("id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    return {
+      success: false,
+      error: `El email ya pertenece a "${existing.name}".`,
+      data: {
+        needsMerge: true,
+        targetId: existing.id,
+        targetName: existing.name,
+      },
+    };
+  }
+
+  // Collision with an auth account that has no app-user row (can't merge).
+  const { data: authList } = await serviceClient.auth.admin.listUsers();
+  const authExists = authList?.users?.some(
+    (u) => u.email?.toLowerCase() === emailNorm
+  );
+  if (authExists) {
+    return {
+      success: false,
+      error: `El email "${email}" ya esta registrado en el sistema de acceso.`,
+    };
+  }
+
+  const invite = await inviteExistingUser(
+    serviceClient,
+    userId,
+    target.name,
+    emailNorm
+  );
+  if (!invite.success) return { success: false, error: invite.error };
+
+  revalidatePath("/collaborators");
+  revalidatePath(`/collaborators/${userId}`);
+  return { success: true, data: { emailWarning: invite.emailWarning } };
+}
+
+/**
+ * Merge the account `absorbedId` into `userId`, then ensure `userId` is a
+ * system_user with login access.
+ *
+ * `userId` (the profile the admin is viewing — typically the virtual profile
+ * that holds the earnings) is the SURVIVOR. `absorbedId` (the account that
+ * owns the wanted email) is repointed into the survivor and then deleted, so
+ * the least financial data moves. Every table referencing `users(id)` is
+ * repointed BEFORE the absorbed row is deleted, so no cascade can drop data.
+ * Non-atomic (sequential writes) but guarded and admin-only.
+ */
+export async function mergeAndConvertToSystemUser(
+  userId: string,
+  absorbedId: string
+): Promise<UserActionResult> {
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "No autenticado" };
+
+  if (userId === absorbedId) {
+    return { success: false, error: "No se puede fusionar un perfil consigo mismo" };
+  }
+
+  // Only super_admins may merge accounts.
+  const { data: appUser } = await supabase
+    .from("users")
+    .select("id, user_partner_roles (role)")
+    .eq("auth_user_id", user.id)
+    .single();
+  const roles = ((appUser?.user_partner_roles as any[]) ?? []).map(
+    (r) => r.role
+  );
+  if (!roles.includes("super_admin")) {
+    return {
+      success: false,
+      error: "Solo un super admin puede fusionar cuentas",
+    };
+  }
+
+  const serviceClient = createServiceRoleClient();
+
+  const { data: survivor } = await serviceClient
+    .from("users")
+    .select("id, name, email, user_type, auth_user_id, is_active")
+    .eq("id", userId)
+    .single();
+  const { data: absorbed } = await serviceClient
+    .from("users")
+    .select("id, name, email, user_type, auth_user_id, is_active")
+    .eq("id", absorbedId)
+    .single();
+
+  if (!survivor || !absorbed) {
+    return { success: false, error: "Una de las cuentas no existe" };
+  }
+  // Never absorb the account the current admin is logged in with.
+  if (absorbed.auth_user_id && absorbed.auth_user_id === user.id) {
+    return {
+      success: false,
+      error: "No puedes fusionar tu propia cuenta activa",
+    };
+  }
+
+  // ── Repoint children absorbed → survivor, deduping UNIQUE constraints ──
+
+  // user_partner_roles UNIQUE(user_id, partner_id)
+  const { data: survRoles } = await serviceClient
+    .from("user_partner_roles")
+    .select("partner_id")
+    .eq("user_id", userId);
+  const survPartners = new Set((survRoles ?? []).map((r: any) => r.partner_id));
+  const { data: absRoles } = await serviceClient
+    .from("user_partner_roles")
+    .select("id, partner_id")
+    .eq("user_id", absorbedId);
+  for (const r of (absRoles ?? []) as any[]) {
+    if (survPartners.has(r.partner_id)) {
+      // survivor already in this partner → drop the duplicate role (and its perms)
+      await serviceClient
+        .from("user_permissions")
+        .delete()
+        .eq("user_partner_role_id", r.id);
+      await serviceClient.from("user_partner_roles").delete().eq("id", r.id);
+    } else {
+      await serviceClient
+        .from("user_partner_roles")
+        .update({ user_id: userId })
+        .eq("id", r.id);
+      survPartners.add(r.partner_id);
+    }
+  }
+
+  // product_distributions UNIQUE(product_id, user_id)
+  let skippedDistributions = 0;
+  const { data: survDist } = await serviceClient
+    .from("product_distributions")
+    .select("product_id")
+    .eq("user_id", userId);
+  const survProducts = new Set((survDist ?? []).map((d: any) => d.product_id));
+  const { data: absDist } = await serviceClient
+    .from("product_distributions")
+    .select("id, product_id")
+    .eq("user_id", absorbedId);
+  for (const d of (absDist ?? []) as any[]) {
+    if (survProducts.has(d.product_id)) {
+      await serviceClient.from("product_distributions").delete().eq("id", d.id);
+      skippedDistributions++;
+    } else {
+      await serviceClient
+        .from("product_distributions")
+        .update({ user_id: userId })
+        .eq("id", d.id);
+      survProducts.add(d.product_id);
+    }
+  }
+
+  // report_line_items UNIQUE(report_id, user_id, product_id)
+  let skippedLineItems = 0;
+  const { data: survLI } = await serviceClient
+    .from("report_line_items")
+    .select("report_id, product_id")
+    .eq("user_id", userId);
+  const survLIKeys = new Set(
+    (survLI ?? []).map((x: any) => `${x.report_id}:${x.product_id}`)
+  );
+  const { data: absLI } = await serviceClient
+    .from("report_line_items")
+    .select("id, report_id, product_id")
+    .eq("user_id", absorbedId);
+  for (const li of (absLI ?? []) as any[]) {
+    const key = `${li.report_id}:${li.product_id}`;
+    if (survLIKeys.has(key)) {
+      await serviceClient.from("report_line_items").delete().eq("id", li.id);
+      skippedLineItems++;
+    } else {
+      await serviceClient
+        .from("report_line_items")
+        .update({ user_id: userId })
+        .eq("id", li.id);
+      survLIKeys.add(key);
+    }
+  }
+
+  // Simple repoints (data-bearing + actor refs). Financial user_id repoints are
+  // checked; actor/audit repoints are best-effort.
+  const critical: { table: string; column: string }[] = [
+    { table: "adjustments", column: "user_id" },
+    { table: "payments", column: "user_id" },
+    { table: "payment_concepts", column: "user_id" },
+    { table: "notifications", column: "user_id" },
+  ];
+  for (const { table, column } of critical) {
+    const { error } = await (serviceClient as any)
+      .from(table)
+      .update({ [column]: userId })
+      .eq(column, absorbedId);
+    if (error) {
+      return {
+        success: false,
+        error: `Error moviendo ${table}: ${error.message}. La fusion se detuvo; las cuentas siguen separadas.`,
+      };
+    }
+  }
+
+  // Actor / audit / session refs — best-effort (repoint keeps history and
+  // avoids ON DELETE RESTRICT blocking the delete). Ignore per-table errors.
+  const bestEffort: { table: string; column: string }[] = [
+    { table: "adjustments", column: "created_by" },
+    { table: "payments", column: "created_by" },
+    { table: "payment_concepts", column: "created_by" },
+    { table: "csv_uploads", column: "created_by" },
+    { table: "monthly_reports", column: "locked_by" },
+    { table: "audit_logs", column: "created_by" },
+    { table: "login_logs", column: "user_id" },
+    { table: "user_sessions", column: "user_id" },
+  ];
+  for (const { table, column } of bestEffort) {
+    await (serviceClient as any)
+      .from(table)
+      .update({ [column]: userId })
+      .eq(column, absorbedId);
+  }
+
+  // Delete the absorbed users row (now childless → cascade drops nothing).
+  // This frees the email + auth_user_id UNIQUE slots for the survivor.
+  const { error: deleteError } = await serviceClient
+    .from("users")
+    .delete()
+    .eq("id", absorbedId);
+  if (deleteError) {
+    return {
+      success: false,
+      error: `Error eliminando la cuenta absorbida: ${deleteError.message}`,
+    };
+  }
+
+  // Promote the survivor to a system_user.
+  let emailWarning: string | null = null;
+  if (absorbed.auth_user_id) {
+    // Absorbed had a real login → survivor inherits it directly.
+    await serviceClient
+      .from("users")
+      .update({
+        email: absorbed.email,
+        auth_user_id: absorbed.auth_user_id,
+        user_type: "system_user",
+        is_active: survivor.is_active || absorbed.is_active || false,
+      })
+      .eq("id", userId);
+  } else if (absorbed.email) {
+    // Neither had a login (merging two virtual profiles) → invite the email.
+    await serviceClient
+      .from("users")
+      .update({ email: absorbed.email })
+      .eq("id", userId);
+    const invite = await inviteExistingUser(
+      serviceClient,
+      userId,
+      survivor.name,
+      absorbed.email
+    );
+    if (!invite.success) return { success: false, error: invite.error };
+    emailWarning = invite.emailWarning ?? null;
+  }
+
+  revalidatePath("/collaborators");
+  revalidatePath(`/collaborators/${userId}`);
+  return {
+    success: true,
+    data: {
+      mergedFrom: absorbed.name,
+      skippedDistributions,
+      skippedLineItems,
+      emailWarning,
+    },
+  };
 }
 
 /**

@@ -24,6 +24,7 @@ import {
   CheckCircle,
   FileText,
   Pencil,
+  UserPlus,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,8 @@ import {
   updateUserAvatar,
   resendInvitation,
   assignUserToPartner,
+  convertToSystemUser,
+  mergeAndConvertToSystemUser,
 } from "@/actions/users";
 import { removeMemberFromPartner } from "@/actions/partners";
 import { uploadFile, getFileExtension } from "@/lib/supabase/storage";
@@ -115,6 +118,13 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar_url);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
+  // Invite / convert virtual profile → system user (with optional merge step)
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState(user.email ?? "");
+  const [inviteStep, setInviteStep] = useState<"form" | "merge">("form");
+  const [mergeTarget, setMergeTarget] = useState<{ id: string; name: string } | null>(null);
+  const [inviting, setInviting] = useState(false);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const cards = containerRef.current.querySelectorAll("[data-animate-card]");
@@ -129,6 +139,51 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
     setSaving(false);
     if (result.success) {
       showToast("Datos actualizados", "success");
+      router.refresh();
+    } else {
+      showToast(result.error ?? "Error", "error");
+    }
+  };
+
+  const openInvite = () => {
+    setInviteEmail(user.email ?? "");
+    setInviteStep("form");
+    setMergeTarget(null);
+    setInviteOpen(true);
+  };
+
+  const handleConvert = async () => {
+    setInviting(true);
+    const result = await convertToSystemUser(user.id, inviteEmail);
+    setInviting(false);
+    if (result.success) {
+      const warn = result.data?.emailWarning;
+      showToast(
+        warn ? `Convertido, pero el correo no se envio: ${warn}` : "Invitacion enviada",
+        warn ? "info" : "success"
+      );
+      setInviteOpen(false);
+      router.refresh();
+    } else if (result.data?.needsMerge) {
+      setMergeTarget({ id: result.data.targetId, name: result.data.targetName });
+      setInviteStep("merge");
+    } else {
+      showToast(result.error ?? "Error", "error");
+    }
+  };
+
+  const handleMerge = async () => {
+    if (!mergeTarget) return;
+    setInviting(true);
+    const result = await mergeAndConvertToSystemUser(user.id, mergeTarget.id);
+    setInviting(false);
+    if (result.success) {
+      const warn = result.data?.emailWarning;
+      showToast(
+        warn ? `Cuentas fusionadas, pero el correo no se envio: ${warn}` : "Cuentas fusionadas",
+        warn ? "info" : "success"
+      );
+      setInviteOpen(false);
       router.refresh();
     } else {
       showToast(result.error ?? "Error", "error");
@@ -249,6 +304,12 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
         </div>
 
         <div className="flex items-center gap-2">
+          {user.user_type === "virtual_profile" && (
+            <Button size="sm" onClick={openInvite}>
+              <UserPlus className="mr-1.5 h-4 w-4" />
+              Invitar al sistema
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleToggle}>
             {user.is_active ? <ToggleRight className="mr-1.5 h-4 w-4 text-green-600" /> : <ToggleLeft className="mr-1.5 h-4 w-4" />}
             {user.is_active ? "Activo" : "Inactivo"}
@@ -493,6 +554,80 @@ export function CollaboratorDetailClient({ data, partners, isSuperAdmin }: Props
           )}
         </div>
       )}
+
+      {/* Invite / convert virtual profile → system user */}
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          if (!inviting) setInviteOpen(open);
+        }}
+      >
+        <DialogContent>
+          {inviteStep === "form" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Invitar al sistema</DialogTitle>
+                <DialogDescription>
+                  Convierte a {displayName(user.name)} en un usuario del sistema:
+                  se crea su acceso y se le envia una invitacion por correo para
+                  que establezca su contrasena.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 py-4">
+                <Label htmlFor="invite-email">Email</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  placeholder="email@ejemplo.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setInviteOpen(false)}
+                  disabled={inviting}
+                >
+                  Cancelar
+                </Button>
+                <Button onClick={handleConvert} disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? "Enviando..." : "Enviar invitacion"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Fusionar cuentas</DialogTitle>
+                <DialogDescription>
+                  Ese email ya pertenece a «{mergeTarget?.name}». Si continuas,
+                  ambos perfiles se combinaran en uno solo: las ganancias,
+                  reportes y pagos quedaran bajo {displayName(user.name)}, que
+                  tomara el acceso de esa cuenta. Esta accion no se puede
+                  deshacer.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setInviteStep("form")}
+                  disabled={inviting}
+                >
+                  Atras
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleMerge}
+                  disabled={inviting}
+                >
+                  {inviting ? "Fusionando..." : "Fusionar cuentas"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
